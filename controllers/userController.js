@@ -3,12 +3,21 @@ const asyncHandler = require("express-async-handler");
 const bcrypt = require("bcrypt");
 const Jwt = require("jsonwebtoken");
 const cloudinary = require("../config/cloudinary");
+const Otp = require("../models/otp/signUpSendOtpModel");
+const nodemailer = require("nodemailer");
 
+// const validateEmail = (email) => {
+//   const emailRegex = /^[A-Za-z0-9._%+-]{3,}@gmail\.com$/;
+//   return emailRegex.test(email);
+// };
 
-const validateEmail = (email) => {
-  const emailRegex = /^[A-Za-z0-9._%+-]{3,}@gmail\.com$/;
-  return emailRegex.test(email);
-};
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // Signup view
 const registerUser = asyncHandler(async (req, res) => {
@@ -23,40 +32,32 @@ const registerUser = asyncHandler(async (req, res) => {
   }
   const allowedFileTypes = ["image/jpeg", "image/png"];
   if (!allowedFileTypes.includes(req.file.mimetype)) {
-    return res
-      .status(400)
-      .json({
-        message: "Invalid file type. Only JPEG or PNG images are allowed.",
-      });
+    return res.status(400).json({
+      message: "Invalid file type. Only JPEG or PNG images are allowed.",
+    });
   }
 
   const textRegex = /^[A-Za-z]+$/;
 
   if (!textRegex.test(username)) {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Username should only contain letters and no spaces or special characters.",
-      });
+    return res.status(400).json({
+      message:
+        "Username should only contain letters and no spaces or special characters.",
+    });
   }
 
   if (!textRegex.test(firstname)) {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Firstname should only contain letters and no spaces or special characters.",
-      });
+    return res.status(400).json({
+      message:
+        "Firstname should only contain letters and no spaces or special characters.",
+    });
   }
 
   if (!textRegex.test(lastname)) {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Lastname should only contain letters and no spaces or special characters.",
-      });
+    return res.status(400).json({
+      message:
+        "Lastname should only contain letters and no spaces or special characters.",
+    });
   }
 
   if (username.length <= 3) {
@@ -65,9 +66,9 @@ const registerUser = asyncHandler(async (req, res) => {
       .json({ message: "Username must be more than 3 characters long." });
   }
 
-  if (!validateEmail(email)) {
-    return res.status(400).json({ message: "Email must have at least 3 characters before @gmail.com" });
-  }
+  // if (!validateEmail(email)) {
+  //   return res.status(400).json({ message: "Email must have at least 3 characters before @gmail.com" });
+  // }
 
   const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
   if (password.length < 8 || !specialCharRegex.test(password)) {
@@ -132,9 +133,13 @@ const loginUser = asyncHandler(async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!validateEmail(email)) {
-      return res.status(400).json({ message: "Email must have at least 3 characters before @gmail.com" });
-    }
+    // if (!validateEmail(email)) {
+    //   return res
+    //     .status(400)
+    //     .json({
+    //       message: "Email must have at least 3 characters before @gmail.com",
+    //     });
+    // }
 
     const existUser = await User.findOne({ email });
     if (!existUser) {
@@ -142,7 +147,11 @@ const loginUser = asyncHandler(async (req, res) => {
     }
 
     if (existUser.isDeleted) {
-      return res.status(400).json({ message: "You are temporarily blocked. Please contact admin." });
+      return res
+        .status(400)
+        .json({
+          message: "You are temporarily blocked. Please contact admin.",
+        });
     }
 
     const isPasswordValid = await bcrypt.compare(password, existUser.password);
@@ -164,7 +173,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const getUserProfile = asyncHandler(async (req, res) => {
   try {
-    const userId = req.user.id; 
+    const userId = req.user.id;
 
     const user = await User.findById(userId).select("-password");
     if (!user) {
@@ -198,20 +207,24 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
     if (existingUser) {
       return res.status(400).json({
-        message: existingUser.email === email
-          ? "Email already exists"
-          : "Username already exists",
+        message:
+          existingUser.email === email
+            ? "Email already exists"
+            : "Username already exists",
       });
     }
 
     // Upload new profile image if provided
     let imageUrl = user.image;
     if (req.file) {
-      const cloudinaryResponse = await cloudinary.uploader.upload(req.file.path, {
-        folder: "uploads",
-        use_filename: true,
-        unique_filename: false,
-      });
+      const cloudinaryResponse = await cloudinary.uploader.upload(
+        req.file.path,
+        {
+          folder: "uploads",
+          use_filename: true,
+          unique_filename: false,
+        }
+      );
       imageUrl = cloudinaryResponse.secure_url;
     }
 
@@ -239,5 +252,177 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   }
 });
 
+const forgotPasswordSendOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
 
-module.exports = { registerUser, loginUser, getUserProfile, updateUserProfile };
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
+  try {
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "No user found with this email" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 1 * 60 * 1000); // 1 minute expiry
+
+    await Otp.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
+    // Send email using your existing transporter
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset OTP",
+      text: `Your OTP for password reset is ${otp}. It will expire in 1 minute.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: "Password reset OTP sent successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error sending OTP", error: error.message });
+  }
+});
+
+// Verify OTP and update password
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  try {
+    // Verify OTP
+    const otpDoc = await Otp.findOne({ email });
+    if (!otpDoc) {
+      return res.status(404).json({ message: "No OTP found for this email" });
+    }
+
+    if (otpDoc.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (otpDoc.expiresAt < new Date()) {
+      await Otp.deleteOne({ email });
+      return res
+        .status(400)
+        .json({ message: "OTP has expired. Please request a new one." });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    await User.findOneAndUpdate({ email }, { password: hashedPassword });
+
+    // Delete used OTP
+    await Otp.deleteOne({ email });
+
+    res.status(200).json({ message: "Password reset successful" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error resetting password", error: error.message });
+  }
+});
+
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({ message: "Email and OTP are required" });
+  }
+
+  try {
+    const otpRecord = await Otp.findOne({ email });
+
+    if (!otpRecord) {
+      return res.status(404).json({ message: "No OTP found for this email" });
+    }
+
+    if (otpRecord.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      // Delete expired OTP
+      await Otp.deleteOne({ email });
+      return res.status(400).json({
+        message: "OTP has expired. Please request a new one.",
+        expired: true,
+      });
+    }
+
+    // Don't delete the OTP yet as it's needed for the password reset step
+    res.status(200).json({
+      message: "OTP verified successfully",
+      verified: true,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error verifying OTP",
+      error: error.message,
+    });
+  }
+});
+
+// Resend OTP for forgot password
+const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
+  try {
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 1 * 60 * 1000); // 1 minute expiry
+
+    // Update or create new OTP record
+    await Otp.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
+    // Send email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset OTP",
+      text: `Your new OTP for password reset is ${otp}. It will expire in 1 minute.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({
+      message: "New OTP sent successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error sending new OTP",
+      error: error.message,
+    });
+  }
+});
+
+module.exports = {
+  registerUser,
+  loginUser,
+  getUserProfile,
+  updateUserProfile,
+  resetPassword,
+  forgotPasswordSendOtp,
+  verifyForgotPasswordOtp,
+  resendForgotPasswordOtp,
+};

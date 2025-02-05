@@ -1,17 +1,34 @@
 const express = require("express");
-const { registerUser, loginUser, getUserProfile, updateUserProfile } = require("../controllers/userController");
+const {
+  registerUser,
+  loginUser,
+  getUserProfile,
+  updateUserProfile,
+  forgotPasswordSendOtp,
+  resetPassword,
+  verifyForgotPasswordOtp,
+  resendForgotPasswordOtp,
+} = require("../controllers/userController");
 const { upload } = require("../middleware/multer");
 const passport = require("passport");
 const User = require("../models/userModel");
-const authMiddleware = require('../middleware/authMiddleware')
+const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
 router.post("/register", upload.single("image"), registerUser);
 router.post("/login", loginUser);
 router.get("/profile", authMiddleware, getUserProfile);
-router.put("/editProfile/:id", authMiddleware, upload.single("image"), updateUserProfile);
-
+router.post('/forgot-password-send-otp', forgotPasswordSendOtp);
+router.post('/reset-password', resetPassword);
+router.post("/verify-forgot-password-otp", verifyForgotPasswordOtp);
+router.post("/resend-forgot-password-otp", resendForgotPasswordOtp);
+router.put(
+  "/editProfile/:id",
+  authMiddleware,
+  upload.single("image"),
+  updateUserProfile
+);
 
 router.get(
   "/auth/google",
@@ -26,7 +43,11 @@ router.get(
 
     const existingUser = await User.findById(user.id);
     if (!existingUser || existingUser.isDeleted) {
-      return res.status(400).json({ message: "You are temporarily blocked. Please contact admin." });
+      return res
+        .status(400)
+        .json({
+          message: "You are temporarily blocked. Please contact admin.",
+        });
     }
 
     res.redirect(`http://localhost:3000?token=${token}`);
