@@ -1,0 +1,95 @@
+const mongoose = require("mongoose");
+
+const checkoutSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    cart: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Cart",
+      required: true,
+    },
+    items: [
+      {
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+          required: true,
+        },
+        variant: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Variant",
+          required: true,
+        },
+        sizeVariant: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "SizeVariant",
+          required: true,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+          min: 1,
+        },
+        price: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+      },
+    ],
+    shipping: {
+      address: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Address",
+        required: true,
+      },
+      shippingMethod: {
+        type: String,
+        required: true,
+        enum: ["Standard", "Express"],
+      },
+    },
+    payment: {
+      method: {
+        type: String,
+        required: true,
+      },
+      status: {
+        type: String,
+        required: true,
+      },
+      transactionId: {
+        type: String,
+        required: true,
+      },
+      amount: {
+        type: Number,
+        required: true,
+      },
+      paymentDate: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+    orderStatus: {
+      type: String,
+      required: true,
+      default: "pending",
+      enum: ["pending", "Processing", "Delivered", "Cancelled"],
+    },
+    totalAmount: {
+      type: Number,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const Checkout = mongoose.model("Checkout", checkoutSchema);
+module.exports = Checkout;

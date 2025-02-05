@@ -10,7 +10,7 @@ const ProductSchema = new mongoose.Schema(
     pattern: { type: String },
     ratings: { type: Number, default: 0 },
     gender: { type: String, required: true },
-    variants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Variant' }], // Links to color variants
+    variants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Variant' }],
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

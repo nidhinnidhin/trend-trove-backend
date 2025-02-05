@@ -11,6 +11,7 @@ const categoryRoutes = require('./routes/product/categoryRoutes')
 const sizesRoutes = require('./routes/product/sizesRoutes')
 const cartRoutes = require('./routes/cart/cartRoutes')
 const addressRoutes = require('./routes/address/addressRoutes')
+const checkoutRoutes = require('./routes/checkout/checkoutRoutes')
 const otpRoutes = require('./routes/otp/signupOtpRoutes')
 const bodyParser = require("body-parser");
 const passport = require("passport");
@@ -43,6 +44,7 @@ app.use('/api/variants/', variantRoutes);
 app.use('/api/sizes/', sizesRoutes);
 app.use('/api/cart/', cartRoutes);
 app.use('/api/address/', addressRoutes);
+app.use('/api/checkout/', checkoutRoutes);
 // app.use('/api/review/', addReview); //otp
 
 

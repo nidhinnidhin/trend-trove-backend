@@ -253,7 +253,22 @@ const addProduct = asyncHandler(async (req, res) => {
 
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
-    const products = await Product.find()
+    const { brand, category, gender } = req.query; // optional filters
+    const filters = {};
+
+    if (brand) {
+      filters.brand = brand;
+    }
+
+    if (category) {
+      filters.category = category;
+    }
+
+    if (gender) {
+      filters.gender = gender;
+    }
+
+    const products = await Product.find(filters)
       .populate("brand", "name")
       .populate("category", "name")
       .populate({
@@ -263,6 +278,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
           model: "SizeVariant",
         },
       });
+
     res.status(200).json(products);
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
@@ -350,24 +366,76 @@ const updateProduct = asyncHandler(async (req, res) => {
   }
 });
 
+const searchProducts = asyncHandler(async (req, res) => {
+  console.log("Hited");
+
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required",
+        products: [],
+      });
+    }
+
+    // Create a case-insensitive regular expression from the query string
+    const searchRegex = new RegExp(query, "i");
+
+    // Search for products matching the query in specified fields (excluding _id)
+    const products = await Product.find({
+      $or: [
+        { name: searchRegex },
+        { description: searchRegex },
+        { material: searchRegex },
+        { pattern: searchRegex },
+        { gender: searchRegex },
+      ],
+    })
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      })
+      .limit(10); // Optional: You can limit the number of products returned
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error searching products",
+      error: error.message,
+    });
+  }
+});
+
 const fetchRelatedProducts = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    // Find the current product to get its category
     const currentProduct = await Product.findById(productId);
     if (!currentProduct) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Find related products in the same category, excluding the current product
     const relatedProducts = await Product.find({
       category: currentProduct.category,
-      _id: { $ne: productId }, // Exclude current product
+      _id: { $ne: productId },
     })
-      .limit(5) // Limit the number of related products
+      .limit(2) 
       .populate({
         path: "variants",
+        options: { limit: 3 },
         populate: {
           path: "sizes",
           model: "SizeVariant",
@@ -380,6 +448,88 @@ const fetchRelatedProducts = async (req, res) => {
   }
 };
 
+const searchAndFetchRelatedProducts = asyncHandler(async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required",
+        products: [],
+      });
+    }
+
+    // Create a case-insensitive regular expression from the query string
+    const searchRegex = new RegExp(query, "i");
+
+    // Search for products matching the query in specified fields
+    const products = await Product.find({
+      $or: [
+        { name: searchRegex },
+        { description: searchRegex },
+        { material: searchRegex },
+        { pattern: searchRegex },
+        { gender: searchRegex },
+      ],
+    })
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      })
+      .limit(10); // Optional: You can limit the number of products returned
+
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No products found matching the query",
+      });
+    }
+
+    // Create a list of related products
+    const relatedProductsPromises = products.map(async (product) => {
+      const relatedProducts = await Product.find({
+        category: product.category._id,
+        _id: { $ne: product._id }, // Exclude the current product
+      })
+        .populate({
+          path: "variants",
+          populate: {
+            path: "sizes",
+            model: "SizeVariant",
+          },
+        })
+        .limit(2); // Limit the number of related products returned for each product
+
+      return {
+        product,
+        relatedProducts,
+      };
+    });
+
+    // Wait for all related products to be fetched
+    const productsWithRelated = await Promise.all(relatedProductsPromises);
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      productsWithRelated,
+    });
+  } catch (error) {
+    console.error("Search and related products error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching search and related products",
+      error: error.message,
+    });
+  }
+});
+
 module.exports = {
   addProduct,
   getAllProducts,
@@ -387,4 +537,6 @@ module.exports = {
   updateProduct,
   getProductDetail,
   fetchRelatedProducts,
+  searchProducts,
+  searchAndFetchRelatedProducts,
 };

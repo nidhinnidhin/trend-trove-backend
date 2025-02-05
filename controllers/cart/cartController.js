@@ -34,7 +34,7 @@ const addToCart = asyncHandler(async (req, res) => {
 
     if (!cart) {
       cart = new Cart({
-        user: req.user.id, 
+        user: req.user.id,
         items: [],
       });
     }
@@ -58,7 +58,7 @@ const addToCart = asyncHandler(async (req, res) => {
         sizeVariant: sizeVariantId,
         quantity,
         price: sizeVariant.price,
-        totalPrice: totalPrice, 
+        totalPrice: totalPrice,
       });
     }
 
@@ -75,7 +75,7 @@ const addToCart = asyncHandler(async (req, res) => {
       cart,
     });
   } catch (error) {
-    console.error("Error adding to cart:", error); 
+    console.error("Error adding to cart:", error);
     res
       .status(500)
       .json({ message: "An error occurred", error: error.message });
@@ -83,26 +83,30 @@ const addToCart = asyncHandler(async (req, res) => {
 });
 
 const getCart = async (req, res) => {
-  const userId = req.user.id; 
+  const userId = req.user.id;
 
   try {
-    const cart = await Cart.findOne({ user: userId, isActive: true })
+    const cart = await Cart.findOne({ user: userId })
       .populate({
-        path: "items.product", 
-        select: "name description price category brand", 
+        path: "items.product",
+        select: "name description price category brand",
       })
       .populate({
-        path: "items.variant", 
-        select: "color colorImage mainImage subImages", 
+        path: "items.variant",
+        select: "color colorImage mainImage subImages",
       })
       .populate({
-        path: "items.sizeVariant", 
-        select: "size price discountPrice stockCount", 
+        path: "items.sizeVariant",
+        select: "size price discountPrice stockCount",
       });
 
-    if (!cart) {
+    if (!cart || cart.items.length === 0) {
       return res.status(404).json({ message: "Cart not found or empty" });
     }
+
+    cart.items = cart.items.sort(
+      (a, b) => new Date(b._id.getTimestamp()) - new Date(a._id.getTimestamp())
+    );
 
     return res
       .status(200)
@@ -116,103 +120,155 @@ const getCart = async (req, res) => {
 };
 
 const deleteProductFromCart = asyncHandler(async (req, res) => {
-    const { productId, variantId, sizeVariantId } = req.body;  // Receiving the IDs from the request body
-  
-    if (!productId || !variantId || !sizeVariantId) {
-      return res.status(400).json({ message: "Product ID, Variant ID, and Size Variant ID are required" });
-    }
-  
-    try {
-      // Find the cart for the logged-in user
-      const cart = await Cart.findOne({ user: req.user.id });
-  
-      if (!cart) {
-        return res.status(404).json({ message: "Cart not found" });
-      }
-  
-      // Find the index of the item in the cart to be removed
-      const itemIndex = cart.items.findIndex(
-        (item) =>
-          item.product.toString() === productId &&
-          item.variant.toString() === variantId &&
-          item.sizeVariant.toString() === sizeVariantId
-      );
-  
-      if (itemIndex === -1) {
-        return res.status(404).json({ message: "Product not found in cart" });
-      }
-  
-      // Remove the item from the cart
-      cart.items.splice(itemIndex, 1);
-  
-      // Recalculate total items and total price
-      cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
-      cart.totalPrice = cart.items.reduce((acc, item) => acc + item.totalPrice, 0);
-  
-      // Save the updated cart
-      await cart.save();
-  
-      res.status(200).json({
-        message: "Product removed from cart successfully",
-        cart,
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error removing product from cart", error: error.message });
-    }
-  });
+  const { productId, variantId, sizeVariantId } = req.body; // Receiving the IDs from the request body
 
-  const updateProductQuantity = asyncHandler(async (req, res) => {
-    const { productId, variantId, sizeVariantId, quantity } = req.body;
-  
-    if (!productId || !variantId || !sizeVariantId || quantity === undefined) {
-      return res.status(400).json({ message: "Product ID, Variant ID, Size Variant ID, and Quantity are required" });
-    }
-  
-    // Check that the quantity does not exceed the maximum limit
-    if (quantity > 4) {
-      return res.status(400).json({ message: "Maximum quantity for a product is 4" });
-    }
-  
-    try {
-      // Find the cart for the logged-in user
-      const cart = await Cart.findOne({ user: req.user.id });
-  
-      if (!cart) {
-        return res.status(404).json({ message: "Cart not found" });
-      }
-  
-      // Find the index of the item in the cart to be updated
-      const itemIndex = cart.items.findIndex(
-        (item) =>
-          item.product.toString() === productId &&
-          item.variant.toString() === variantId &&
-          item.sizeVariant.toString() === sizeVariantId
-      );
-  
-      if (itemIndex === -1) {
-        return res.status(404).json({ message: "Product not found in cart" });
-      }
-  
-      // Update the quantity and total price for the item
-      cart.items[itemIndex].quantity = quantity;
-      cart.items[itemIndex].totalPrice = cart.items[itemIndex].quantity * cart.items[itemIndex].price;
-  
-      // Recalculate total items and total price
-      cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
-      cart.totalPrice = cart.items.reduce((acc, item) => acc + item.totalPrice, 0);
-  
-      // Save the updated cart
-      await cart.save();
-  
-      res.status(200).json({
-        message: "Product quantity updated successfully",
-        cart,
-      });
-    } catch (error) {
-      console.error("Error updating quantity:", error);
-      res.status(500).json({ message: "Server error", error: error.message });
-    }
-  });
+  if (!productId || !variantId || !sizeVariantId) {
+    return res.status(400).json({
+      message: "Product ID, Variant ID, and Size Variant ID are required",
+    });
+  }
 
-module.exports = { addToCart, getCart, deleteProductFromCart, updateProductQuantity };
+  try {
+    // Find the cart for the logged-in user
+    const cart = await Cart.findOne({ user: req.user.id });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Find the index of the item in the cart to be removed
+    const itemIndex = cart.items.findIndex(
+      (item) =>
+        item.product.toString() === productId &&
+        item.variant.toString() === variantId &&
+        item.sizeVariant.toString() === sizeVariantId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: "Product not found in cart" });
+    }
+
+    // Remove the item from the cart
+    cart.items.splice(itemIndex, 1);
+
+    // Recalculate total items and total price
+    cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
+    cart.totalPrice = cart.items.reduce(
+      (acc, item) => acc + item.totalPrice,
+      0
+    );
+
+    // Save the updated cart
+    await cart.save();
+
+    res.status(200).json({
+      message: "Product removed from cart successfully",
+      cart,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Error removing product from cart",
+      error: error.message,
+    });
+  }
+});
+
+const updateProductQuantity = asyncHandler(async (req, res) => {
+  const { productId, variantId, sizeVariantId, quantity } = req.body;
+
+  if (!productId || !variantId || !sizeVariantId || quantity === undefined) {
+    return res.status(400).json({
+      message:
+        "Product ID, Variant ID, Size Variant ID, and Quantity are required",
+    });
+  }
+
+  // Check that the quantity does not exceed the maximum limit
+  if (quantity > 4) {
+    return res
+      .status(400)
+      .json({ message: "Maximum quantity for a product is 4" });
+  }
+
+  try {
+    // Find the cart for the logged-in user
+    const cart = await Cart.findOne({ user: req.user.id });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Find the index of the item in the cart to be updated
+    const itemIndex = cart.items.findIndex(
+      (item) =>
+        item.product.toString() === productId &&
+        item.variant.toString() === variantId &&
+        item.sizeVariant.toString() === sizeVariantId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: "Product not found in cart" });
+    }
+
+    // Update the quantity and total price for the item
+    cart.items[itemIndex].quantity = quantity;
+    cart.items[itemIndex].totalPrice =
+      cart.items[itemIndex].quantity * cart.items[itemIndex].price;
+
+    // Recalculate total items and total price
+    cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
+    cart.totalPrice = cart.items.reduce(
+      (acc, item) => acc + item.totalPrice,
+      0
+    );
+
+    // Save the updated cart
+    await cart.save();
+
+    res.status(200).json({
+      message: "Product quantity updated successfully",
+      cart,
+    });
+  } catch (error) {
+    console.error("Error updating quantity:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+const clearCart = asyncHandler(async (req, res) => {
+  const userId = req.user.id; // Get the logged-in user's ID
+
+  try {
+    // Find the cart for the logged-in user
+    const cart = await Cart.findOne({ user: userId });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Clear the items array in the cart
+    cart.items = [];
+    cart.totalItems = 0;
+    cart.totalPrice = 0;
+
+    // Save the updated cart
+    await cart.save();
+
+    res.status(200).json({
+      message: "Cart cleared successfully",
+      cart,
+    });
+  } catch (error) {
+    console.error("Error clearing cart:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+module.exports = {
+  addToCart,
+  getCart,
+  deleteProductFromCart,
+  updateProductQuantity,
+  clearCart,
+};
