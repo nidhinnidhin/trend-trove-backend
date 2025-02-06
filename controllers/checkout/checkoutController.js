@@ -1,9 +1,14 @@
 const Checkout = require("../../models/checkout/checkoutModal");
 const Cart = require("../../models/cart/cartModal");
 const Address = require("../../models/address/addressModal");
+const Size = require("../../models/checkout/checkoutModal");
 const asyncHandler = require("express-async-handler");
+const { mongoose } = require("mongoose");
 
 const createCheckout = asyncHandler(async (req, res) => {
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
   const {
     cartId,
     addressId,
@@ -83,15 +88,20 @@ const createCheckout = asyncHandler(async (req, res) => {
     });
 
     // Save the checkout data
-    const savedCheckout = await newCheckout.save();
+    await newCheckout.save({ session });
 
     // Optionally, clear the cart if the checkout is successful
+    cart.items = [];
+    cart.totalPrice = 0;
     cart.isActive = false;
-    await cart.save();
+    await cart.save({ session });
 
+    await session.commitTransaction();
+    
     res.status(201).json({
+      success: true,
       message: "Checkout completed successfully",
-      checkout: savedCheckout,
+      orderId: newCheckout._id
     });
   } catch (error) {
     console.error(error);
@@ -104,18 +114,18 @@ const createCheckout = asyncHandler(async (req, res) => {
 const getOrders = asyncHandler(async (req, res) => {
   try {
     const orders = await Checkout.find({ user: req.user.id })
-      .sort({ createdAt: -1 }) // Sort by newest first
+      .sort({ createdAt: -1 })
       .populate({
         path: "items.product",
-        select: "name price", // Add any other product fields you need
+        select: "name price",
       })
       .populate({
         path: "items.variant",
-        select: "color mainImage", // Add image and color info
+        select: "color mainImage",
       })
       .populate({
         path: "items.sizeVariant",
-        select: "size price", // Add size and price info
+        select: "size price",
       })
       .populate({
         path: "shipping.address",
@@ -129,7 +139,6 @@ const getOrders = asyncHandler(async (req, res) => {
       });
     }
 
-    // Transform the orders data to a more friendly format
     const formattedOrders = orders.map((order) => ({
       orderId: order._id,
       orderDate: order.createdAt,
@@ -142,6 +151,8 @@ const getOrders = asyncHandler(async (req, res) => {
         amount: order.payment.amount,
       },
       items: order.items.map((item) => ({
+        itemId: item._id,
+        status: item.status,
         productName: item.product?.name || "N/A",
         price: item.sizeVariant?.price || 0,
         quantity: item.quantity,
@@ -166,4 +177,179 @@ const getOrders = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { createCheckout, getOrders };
+const getAllOrders = asyncHandler(async (req, res) => {
+  try {
+    const orders = await Checkout.find()
+      .populate({
+        path: "user",
+        select: "name email",
+      })
+      .populate({
+        path: "items.product",
+        select: "name",
+      })
+      .populate({
+        path: "items.variant",
+        select: "color mainImage",
+      })
+      .populate({
+        path: "items.sizeVariant",
+        select: "size price stockCount",
+      })
+      .populate({
+        path: "shipping.address",
+        select: "fullName address city state pincode mobileNumber addressType",
+      })
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    // Format orders for admin panel display
+    const formattedOrders = orders.map((order) => ({
+      orderId: order._id,
+      customer: {
+        name: order.user.name,
+        email: order.user.email,
+      },
+      items: order.items.map((item) => ({
+        itemId: item._id,
+        productName: item.product.name,
+        color: item.variant.color,
+        size: item.sizeVariant.size,
+        quantity: item.quantity,
+        price: item.price,
+        image: item.variant.mainImage,
+      })),
+      shippingAddress: order.shipping.address,
+      shippingMethod: order.shipping.shippingMethod,
+      payment: {
+        method: order.payment.method,
+        status: order.payment.status,
+        transactionId: order.payment.transactionId,
+        amount: order.payment.amount,
+        date: order.payment.paymentDate,
+      },
+      orderStatus: order.orderStatus,
+      totalAmount: order.totalAmount,
+      createdAt: order.createdAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      orders: formattedOrders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching orders",
+      error: error.message,
+    });
+  }
+});
+
+const updateOrderStatus = asyncHandler(async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { newStatus } = req.body;
+
+    // Validate status
+    const validStatuses = ["pending", "Processing", "Delivered", "Cancelled"];
+    if (!validStatuses.includes(newStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order status",
+      });
+    }
+
+    const order = await Checkout.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // If order is being cancelled, restore product quantities
+    if (newStatus === "Cancelled" && order.orderStatus !== "Cancelled") {
+      for (const item of order.items) {
+        const sizeVariant = await Size.findById(item.sizeVariant);
+        if (sizeVariant) {
+          sizeVariant.stockCount += item.quantity;
+          await sizeVariant.save();
+        }
+      }
+    }
+
+    // Update order status
+    order.orderStatus = newStatus;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error updating order status",
+      error: error.message,
+    });
+  }
+});
+
+const cancelOrder = asyncHandler(async (req, res) => {
+  const { orderId, itemId } = req.params;
+  const { reason } = req.body; 
+
+  try {
+    const order = await Checkout.findById(orderId);
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    const itemIndex = order.items.findIndex(
+      (item) => item._id.toString() === itemId
+    );
+
+    if (itemIndex === -1) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Item not found" });
+    }
+
+    order.items[itemIndex].status = "Cancelled"; 
+
+    const allCancelled = order.items.every(
+      (item) => item.status === "Cancelled"
+    );
+
+    if (allCancelled) {
+      order.orderStatus = "Cancelled";
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order item cancelled successfully",
+      order, 
+    });
+  } catch (error) {
+    console.error("Error cancelling item:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error cancelling item",
+      error: error.message,
+    });
+  }
+});
+
+module.exports = {
+  createCheckout,
+  getOrders,
+  getAllOrders,
+  updateOrderStatus,
+  cancelOrder,
+};

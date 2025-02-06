@@ -39,6 +39,14 @@ const checkoutSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        status: {
+          type: String,
+          default: "pending",
+          enum: ["pending", "Processing", "Delivered", "Cancelled"],
+        },
+        cancellationReason: {
+          type: String,
+        },
       },
     ],
     shipping: {
@@ -80,6 +88,9 @@ const checkoutSchema = new mongoose.Schema(
       required: true,
       default: "pending",
       enum: ["pending", "Processing", "Delivered", "Cancelled"],
+    },
+    reason: {
+      type: String
     },
     totalAmount: {
       type: Number,

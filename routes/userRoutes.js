@@ -30,10 +30,7 @@ router.put(
   updateUserProfile
 );
 
-router.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
-);
+router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 router.get(
   "/auth/google/callback",
