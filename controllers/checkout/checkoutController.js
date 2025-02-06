@@ -6,7 +6,6 @@ const asyncHandler = require("express-async-handler");
 const { mongoose } = require("mongoose");
 
 const createCheckout = asyncHandler(async (req, res) => {
-
   const session = await mongoose.startSession();
   session.startTransaction();
   const {
@@ -87,6 +86,8 @@ const createCheckout = asyncHandler(async (req, res) => {
       totalAmount: finalAmount,
     });
 
+    console.log(newCheckout.items);
+
     // Save the checkout data
     await newCheckout.save({ session });
 
@@ -97,11 +98,11 @@ const createCheckout = asyncHandler(async (req, res) => {
     await cart.save({ session });
 
     await session.commitTransaction();
-    
+
     res.status(201).json({
       success: true,
       message: "Checkout completed successfully",
-      orderId: newCheckout._id
+      orderId: newCheckout._id,
     });
   } catch (error) {
     console.error(error);
@@ -110,6 +111,91 @@ const createCheckout = asyncHandler(async (req, res) => {
       .json({ message: "Error completing checkout", error: error.message });
   }
 });
+
+// const createCheckout = asyncHandler(async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const {
+//       cartId,
+//       addressId,
+//       shippingMethod,
+//       paymentMethod,
+//       transactionId,
+//       paymentStatus,
+//     } = req.body;
+
+//     if (
+//       !cartId ||
+//       !addressId ||
+//       !shippingMethod ||
+//       !paymentMethod ||
+//       !transactionId ||
+//       !paymentStatus
+//     ) {
+//       return res.status(400).json({ message: "All fields are required" });
+//     }
+
+//     const cart = await Cart.findById(cartId)
+//       .populate({
+//         path: "items.product",
+//         select: "name price",
+//       })
+//       .populate({
+//         path: "items.variant",
+//         select: "color mainImage",
+//       })
+//       .populate({
+//         path: "items.sizeVariant",
+//         select: "size price stockCount",
+//       });
+
+//     if (!cart) {
+//       return res.status(404).json({ message: "Cart not found" });
+//     }
+
+//  console.log("Cart Object: ", JSON.stringify(cart, null, 2));
+
+//     // Check stock availability and update quantities
+//     for (const item of cart.items) {
+//       const sizeVariant = await Size.findById(item.sizeVariant._id);
+//       console.log(sizeVariant);
+
+//       if (!sizeVariant) {
+//         console.error(`Size variant not found for product ${item.product.name} with sizeVariant ID: ${item.sizeVariant._id}`);
+//         await session.abortTransaction();
+//         return res.status(404).json({
+//           message: `Size variant not found for product ${item.product.name}`,
+//         });
+//       }
+
+//       if (sizeVariant.stockCount < item.quantity) {
+//         await session.abortTransaction();
+//         return res.status(400).json({
+//           message: `Insufficient stock for ${item.product.name}. Available: ${sizeVariant.stockCount}`,
+//         });
+//       }
+
+//       // Decrease stock count
+//       sizeVariant.stockCount -= item.quantity;
+//       if (sizeVariant.stockCount === 0) {
+//         sizeVariant.inStock = false;
+//       }
+//       await sizeVariant.save({ session });
+//     }
+
+//     // Rest of the code...
+//   } catch (error) {
+//     await session.abortTransaction();
+//     res.status(500).json({
+//       message: "Error completing checkout",
+//       error: error.message,
+//     });
+//   } finally {
+//     session.endSession();
+//   }
+// });
 
 const getOrders = asyncHandler(async (req, res) => {
   try {
@@ -297,16 +383,24 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 });
 
 const cancelOrder = asyncHandler(async (req, res) => {
-  const { orderId, itemId } = req.params;
-  const { reason } = req.body; 
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    const order = await Checkout.findById(orderId);
+    const { orderId, itemId } = req.params;
+    const { reason } = req.body;
+
+    const order = await Checkout.findById(orderId).populate({
+      path: "items.sizeVariant",
+      select: "stockCount inStock",
+    });
 
     if (!order) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
 
     const itemIndex = order.items.findIndex(
@@ -314,12 +408,30 @@ const cancelOrder = asyncHandler(async (req, res) => {
     );
 
     if (itemIndex === -1) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Item not found" });
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
     }
 
-    order.items[itemIndex].status = "Cancelled"; 
+    const item = order.items[itemIndex];
+
+    // Only restore stock if item wasn't already cancelled
+    if (item.status !== "Cancelled") {
+      const sizeVariant = await Size.findById(item.sizeVariant._id);
+
+      if (sizeVariant) {
+        sizeVariant.stockCount += item.quantity;
+        if (sizeVariant.stockCount > 0) {
+          sizeVariant.inStock = true;
+        }
+        await sizeVariant.save({ session });
+      }
+    }
+
+    order.items[itemIndex].status = "Cancelled";
+    order.items[itemIndex].cancellationReason = reason;
 
     const allCancelled = order.items.every(
       (item) => item.status === "Cancelled"
@@ -327,22 +439,26 @@ const cancelOrder = asyncHandler(async (req, res) => {
 
     if (allCancelled) {
       order.orderStatus = "Cancelled";
+      order.reason = reason;
     }
 
-    await order.save();
+    await order.save({ session });
+    await session.commitTransaction();
 
     res.status(200).json({
       success: true,
       message: "Order item cancelled successfully",
-      order, 
+      order,
     });
   } catch (error) {
-    console.error("Error cancelling item:", error);
+    await session.abortTransaction();
     res.status(500).json({
       success: false,
       message: "Error cancelling item",
       error: error.message,
     });
+  } finally {
+    session.endSession();
   }
 });
 

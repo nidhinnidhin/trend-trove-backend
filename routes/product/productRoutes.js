@@ -21,7 +21,7 @@
 
 
 const express = require("express");
-const { addProduct, getAllProducts, getProductById, updateProduct, getProductDetail, fetchRelatedProducts, searchProducts, searchAndFetchRelatedProducts } = require("../../controllers/product/productController");
+const { addProduct, getAllProducts, getProductById, updateProduct, getProductDetail, fetchRelatedProducts, searchProducts, searchAndFetchRelatedProducts, blockProduct, unBlockProduct } = require("../../controllers/product/productController");
 
 const router = express.Router();
 
@@ -35,5 +35,7 @@ router.get("/:id/details", getProductDetail);
 router.get("/related/:category/:productId", fetchRelatedProducts);
 router.get("/product/search", searchProducts);
 router.get("/product/search/related", searchAndFetchRelatedProducts);
+router.patch('/block/:id', blockProduct)
+router.patch('/unblock/:id', unBlockProduct)
 
 module.exports = router;
