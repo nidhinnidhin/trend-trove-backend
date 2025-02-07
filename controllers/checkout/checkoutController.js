@@ -1,75 +1,81 @@
 const Checkout = require("../../models/checkout/checkoutModal");
 const Cart = require("../../models/cart/cartModal");
 const Address = require("../../models/address/addressModal");
-const Size = require("../../models/checkout/checkoutModal");
+const Size = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 const { mongoose } = require("mongoose");
+
+const orderPopulateConfig = [
+  {
+    path: 'user',
+    select: 'name email'
+  },
+  {
+    path: 'items.product',
+    select: 'name price'
+  },
+  {
+    path: 'items.variant',
+    select: 'color mainImage'
+  },
+  {
+    path: 'items.sizeVariant',
+    select: 'size price stockCount'
+  },
+  {
+    path: 'shipping.address',
+    select: 'fullName address city state pincode mobileNumber addressType'
+  }
+];
 
 const createCheckout = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  const {
-    cartId,
-    addressId,
-    shippingMethod,
-    paymentMethod,
-    transactionId,
-    paymentStatus,
-  } = req.body;
-
-  // Validate required fields
-  if (
-    !cartId ||
-    !addressId ||
-    !shippingMethod ||
-    !paymentMethod ||
-    !transactionId ||
-    !paymentStatus
-  ) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
+  
   try {
-    // Fetch the cart details using the cartId
+    const {
+      cartId,
+      addressId,
+      shippingMethod,
+      paymentMethod,
+      transactionId,
+      paymentStatus,
+    } = req.body;
+
+    if (!cartId || !addressId || !shippingMethod || !paymentMethod || !transactionId || !paymentStatus) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
     const cart = await Cart.findById(cartId)
-      .populate({
-        path: "items.product",
-        select: "name price",
-      })
-      .populate({
-        path: "items.variant",
-        select: "color mainImage",
-      })
-      .populate({
-        path: "items.sizeVariant",
-        select: "size price stockCount",
-      });
+      .populate([
+        { path: 'items.product', select: 'name price' },
+        { path: 'items.variant', select: 'color mainImage' },
+        { path: 'items.sizeVariant', select: 'size price stockCount' }
+      ]);
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // Fetch the address details using the addressId
     const address = await Address.findById(addressId);
     if (!address) {
       return res.status(404).json({ message: "Address not found" });
     }
 
-    // Calculate the total amount based on the cart items and shipping method
-    const totalAmount = cart.totalPrice; // Add shipping cost if required
-    const shippingCost = shippingMethod === "Express" ? 15 : 5; // Example: Add different shipping charges for Express/Standard
+    const totalAmount = cart.totalPrice;
+    const shippingCost = shippingMethod === "Express" ? 15 : 5;
     const finalAmount = totalAmount + shippingCost;
 
-    // Create a new checkout object
     const newCheckout = new Checkout({
       user: req.user.id,
       cart: cartId,
       items: cart.items.map((item) => ({
-        product: item.product,
-        variant: item.variant,
-        sizeVariant: item.sizeVariant,
+        product: item.product._id,
+        variant: item.variant._id,
+        sizeVariant: item.sizeVariant._id,
         quantity: item.quantity,
-        price: item.price,
+        price: item.sizeVariant.price,
+        status: 'pending'
       })),
       shipping: {
         address: addressId,
@@ -82,141 +88,56 @@ const createCheckout = asyncHandler(async (req, res) => {
         amount: finalAmount,
         paymentDate: new Date(),
       },
-      orderStatus: "pending", // Initial order status, can be updated later
+      orderStatus: "pending",
       totalAmount: finalAmount,
     });
-
-    console.log(newCheckout.items);
-
-    // Save the checkout data
     await newCheckout.save({ session });
 
-    // Optionally, clear the cart if the checkout is successful
+    for (const item of cart.items) {
+      const sizeVariant = await Size.findById(item.sizeVariant._id);
+      console.log("------------",sizeVariant.stockCount );
+      
+      if (sizeVariant) {
+        sizeVariant.stockCount -= item.quantity;
+        if (sizeVariant.stockCount <= 0) {
+          sizeVariant.inStock = false;
+        }
+        await sizeVariant.save({ session });
+      }
+    }
     cart.items = [];
     cart.totalPrice = 0;
     cart.isActive = false;
     await cart.save({ session });
 
     await session.commitTransaction();
+    const completedOrder = await Checkout.findById(newCheckout._id)
+      .populate(orderPopulateConfig);
 
     res.status(201).json({
       success: true,
       message: "Checkout completed successfully",
-      orderId: newCheckout._id,
+      order: completedOrder
     });
+
   } catch (error) {
+    await session.abortTransaction();
     console.error(error);
-    res
-      .status(500)
-      .json({ message: "Error completing checkout", error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: "Error completing checkout", 
+      error: error.message 
+    });
+  } finally {
+    session.endSession();
   }
 });
-
-// const createCheckout = asyncHandler(async (req, res) => {
-//   const session = await mongoose.startSession();
-//   session.startTransaction();
-
-//   try {
-//     const {
-//       cartId,
-//       addressId,
-//       shippingMethod,
-//       paymentMethod,
-//       transactionId,
-//       paymentStatus,
-//     } = req.body;
-
-//     if (
-//       !cartId ||
-//       !addressId ||
-//       !shippingMethod ||
-//       !paymentMethod ||
-//       !transactionId ||
-//       !paymentStatus
-//     ) {
-//       return res.status(400).json({ message: "All fields are required" });
-//     }
-
-//     const cart = await Cart.findById(cartId)
-//       .populate({
-//         path: "items.product",
-//         select: "name price",
-//       })
-//       .populate({
-//         path: "items.variant",
-//         select: "color mainImage",
-//       })
-//       .populate({
-//         path: "items.sizeVariant",
-//         select: "size price stockCount",
-//       });
-
-//     if (!cart) {
-//       return res.status(404).json({ message: "Cart not found" });
-//     }
-
-//  console.log("Cart Object: ", JSON.stringify(cart, null, 2));
-
-//     // Check stock availability and update quantities
-//     for (const item of cart.items) {
-//       const sizeVariant = await Size.findById(item.sizeVariant._id);
-//       console.log(sizeVariant);
-
-//       if (!sizeVariant) {
-//         console.error(`Size variant not found for product ${item.product.name} with sizeVariant ID: ${item.sizeVariant._id}`);
-//         await session.abortTransaction();
-//         return res.status(404).json({
-//           message: `Size variant not found for product ${item.product.name}`,
-//         });
-//       }
-
-//       if (sizeVariant.stockCount < item.quantity) {
-//         await session.abortTransaction();
-//         return res.status(400).json({
-//           message: `Insufficient stock for ${item.product.name}. Available: ${sizeVariant.stockCount}`,
-//         });
-//       }
-
-//       // Decrease stock count
-//       sizeVariant.stockCount -= item.quantity;
-//       if (sizeVariant.stockCount === 0) {
-//         sizeVariant.inStock = false;
-//       }
-//       await sizeVariant.save({ session });
-//     }
-
-//     // Rest of the code...
-//   } catch (error) {
-//     await session.abortTransaction();
-//     res.status(500).json({
-//       message: "Error completing checkout",
-//       error: error.message,
-//     });
-//   } finally {
-//     session.endSession();
-//   }
-// });
 
 const getOrders = asyncHandler(async (req, res) => {
   try {
     const orders = await Checkout.find({ user: req.user.id })
       .sort({ createdAt: -1 })
-      .populate({
-        path: "items.product",
-        select: "name price",
-      })
-      .populate({
-        path: "items.variant",
-        select: "color mainImage",
-      })
-      .populate({
-        path: "items.sizeVariant",
-        select: "size price",
-      })
-      .populate({
-        path: "shipping.address",
-        select: "fullName address city state pincode mobileNumber addressType",
-      });
+      .populate(orderPopulateConfig);
 
     if (!orders || orders.length === 0) {
       return res.status(404).json({
@@ -266,43 +187,23 @@ const getOrders = asyncHandler(async (req, res) => {
 const getAllOrders = asyncHandler(async (req, res) => {
   try {
     const orders = await Checkout.find()
-      .populate({
-        path: "user",
-        select: "name email",
-      })
-      .populate({
-        path: "items.product",
-        select: "name",
-      })
-      .populate({
-        path: "items.variant",
-        select: "color mainImage",
-      })
-      .populate({
-        path: "items.sizeVariant",
-        select: "size price stockCount",
-      })
-      .populate({
-        path: "shipping.address",
-        select: "fullName address city state pincode mobileNumber addressType",
-      })
-      .sort({ createdAt: -1 }); // Sort by newest first
+      .populate(orderPopulateConfig)
+      .sort({ createdAt: -1 });
 
-    // Format orders for admin panel display
     const formattedOrders = orders.map((order) => ({
       orderId: order._id,
       customer: {
-        name: order.user.name,
-        email: order.user.email,
+        name: order.user?.name,
+        email: order.user?.email,
       },
       items: order.items.map((item) => ({
         itemId: item._id,
-        productName: item.product.name,
-        color: item.variant.color,
-        size: item.sizeVariant.size,
+        productName: item.product?.name,
+        color: item.variant?.color,
+        size: item.sizeVariant?.size,
         quantity: item.quantity,
         price: item.price,
-        image: item.variant.mainImage,
+        image: item.variant?.mainImage,
       })),
       shippingAddress: order.shipping.address,
       shippingMethod: order.shipping.shippingMethod,
@@ -326,6 +227,31 @@ const getAllOrders = asyncHandler(async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching orders",
+      error: error.message,
+    });
+  }
+});
+
+const orderHistory = asyncHandler(async (req, res) => {
+  try {
+    const order = await Checkout.findById(req.params.orderId)
+      .populate(orderPopulateConfig);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching order history",
       error: error.message,
     });
   }
@@ -461,11 +387,11 @@ const cancelOrder = asyncHandler(async (req, res) => {
     session.endSession();
   }
 });
-
 module.exports = {
   createCheckout,
   getOrders,
   getAllOrders,
   updateOrderStatus,
   cancelOrder,
+  orderHistory
 };

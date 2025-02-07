@@ -253,22 +253,13 @@ const addProduct = asyncHandler(async (req, res) => {
 
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
-    const { brand, category, gender } = req.query; // optional filters
-    const filters = {};
+    const { page = 1, limit = 5 } = req.query; // Pagination parameters
+    const skip = (page - 1) * limit;
 
-    if (brand) {
-      filters.brand = brand;
-    }
-
-    if (category) {
-      filters.category = category;
-    }
-
-    if (gender) {
-      filters.gender = gender;
-    }
-
-    const products = await Product.find(filters)
+    const products = await Product.find({})
+      .sort({ createdAt: -1 }) // Sort by latest products
+      .skip(skip)
+      .limit(parseInt(limit))
       .populate("brand", "name")
       .populate("category", "name")
       .populate({
@@ -279,7 +270,13 @@ const getAllProducts = asyncHandler(async (req, res) => {
         },
       });
 
-    res.status(200).json(products);
+    const totalProducts = await Product.countDocuments({});
+
+    res.status(200).json({
+      products, // Array of products
+      totalPages: Math.ceil(totalProducts / limit), // Total number of pages
+      currentPage: parseInt(page), // Current page number
+    });
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
   }
@@ -432,7 +429,7 @@ const fetchRelatedProducts = async (req, res) => {
       category: currentProduct.category,
       _id: { $ne: productId },
     })
-      .limit(2) 
+      .limit(2)
       .populate({
         path: "variants",
         options: { limit: 3 },
@@ -545,7 +542,9 @@ const blockProduct = asyncHandler(async (req, res) => {
 
     res.status(200).json({ message: "Product blocked successfully", product });
   } catch (error) {
-    res.status(500).json({ message: "Error blocking product", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error blocking product", error: error.message });
   }
 });
 
@@ -563,9 +562,13 @@ const unBlockProduct = asyncHandler(async (req, res) => {
     product.isDeleted = false;
     await product.save();
 
-    res.status(200).json({ message: "Product unblocked successfully", product });
+    res
+      .status(200)
+      .json({ message: "Product unblocked successfully", product });
   } catch (error) {
-    res.status(500).json({ message: "Error unblocking product", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error unblocking product", error: error.message });
   }
 });
 
@@ -579,5 +582,5 @@ module.exports = {
   searchProducts,
   searchAndFetchRelatedProducts,
   blockProduct,
-  unBlockProduct
+  unBlockProduct,
 };
