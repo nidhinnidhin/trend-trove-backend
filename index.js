@@ -4,14 +4,20 @@ const app = express();
 const cors = require("cors");
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes')
-const productRoutes = require('./routes/product/productRoutes')
-const brandRoutes = require('./routes/product/brandRoutes')
-const variantRoutes = require('./routes/product/variantRoutes')
-const categoryRoutes = require('./routes/product/categoryRoutes')
-const sizesRoutes = require('./routes/product/sizesRoutes')
+const userProductRoutes = require('./routes/product/productRoutes')
+const adminProductRoutes = require('./admin/routes/product/ProductRoutes')
+const userBrandRoutes = require('./routes/product/brandRoutes')
+const adminBrandRoutes = require('./admin/routes/product/BrandRoutes')
+const userColorVariantRoutes = require('./routes/product/variantRoutes')
+const adminColorVariantRoutes = require('./admin/routes/product/ColorVariantRoutes')
+const userCategoryRoutes = require('./routes/product/categoryRoutes')
+const adminCategoryRoutes = require('./admin/routes/product/CategoryRoutes')
+const userSizeVariantRoutes = require('./routes/product/sizesRoutes')
+const adminSizeVariantRoutes = require('./admin/routes/product/SizeVariantRoutes')
 const cartRoutes = require('./routes/cart/cartRoutes')
 const addressRoutes = require('./routes/address/addressRoutes')
-const checkoutRoutes = require('./routes/checkout/checkoutRoutes')
+const userCheckoutRoutes = require('./routes/checkout/checkoutRoutes')
+const adminCheckoutRoutes = require('./admin/routes/checkout/CheckoutRoutes')
 const otpRoutes = require('./routes/otp/signupOtpRoutes')
 const bodyParser = require("body-parser");
 const passport = require("passport");
@@ -36,15 +42,21 @@ const corsOptions = {
 // Routes
 app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);
-app.use("/api/products/", productRoutes); // Add product routes
-app.use("/api/brands/", brandRoutes); // Add brand routes
-app.use("/api/categories/", categoryRoutes); // Add brand category
+app.use("/api/products/", userProductRoutes); 
+app.use("/api/admin/products/", adminProductRoutes); 
+app.use("/api/brands/", userBrandRoutes); // Add brand routes
+app.use("/api/admin/brands/", adminBrandRoutes); // Add brand routes
+app.use("/api/categories/", userCategoryRoutes);
+app.use("/api/admin/categories/", adminCategoryRoutes);
 app.use('/api/otp/', otpRoutes); //otp
-app.use('/api/variants/', variantRoutes);
-app.use('/api/sizes/', sizesRoutes);
+app.use('/api/variants/', userColorVariantRoutes);
+app.use('/api/admin/variants/', adminColorVariantRoutes);
+app.use('/api/sizes/', userSizeVariantRoutes);
+app.use('/api/admin/sizes/', adminSizeVariantRoutes);
 app.use('/api/cart/', cartRoutes);
 app.use('/api/address/', addressRoutes);
-app.use('/api/checkout/', checkoutRoutes);
+app.use('/api/checkout/', userCheckoutRoutes);
+app.use('/api/admin/checkout/', adminCheckoutRoutes);
 // app.use('/api/review/', addReview); //otp
 
 
