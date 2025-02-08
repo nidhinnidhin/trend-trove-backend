@@ -4,6 +4,6 @@ const { getAllOrders, updateOrderStatus, orderHistory } = require("../../control
 
 router.get("/get-all-order-product", getAllOrders)
 router.get("/order-history/:orderId", orderHistory)
-router.patch("/update-order-status/:orderId", updateOrderStatus);
+router.patch("/update-order-status/:orderId/:itemId", updateOrderStatus);
 
 module.exports = router;

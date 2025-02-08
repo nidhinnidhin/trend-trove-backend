@@ -3,6 +3,7 @@ const Cart = require("../../../models/cart/cartModal");
 const Address = require("../../../models/address/addressModal");
 const Size = require("../../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
+const { default: mongoose } = require("mongoose");
 
 const orderPopulateConfig = [
   {
@@ -101,8 +102,11 @@ const orderHistory = asyncHandler(async (req, res) => {
 });
 
 const updateOrderStatus = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { orderId } = req.params;
+    const { orderId, itemId } = req.params;
     const { newStatus } = req.body;
 
     // Validate status
@@ -114,7 +118,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
       });
     }
 
-    const order = await Checkout.findById(orderId);
+    const order = await Checkout.findById(orderId).session(session);
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -122,32 +126,54 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
       });
     }
 
-    // If order is being cancelled, restore product quantities
-    if (newStatus === "Cancelled" && order.orderStatus !== "Cancelled") {
-      for (const item of order.items) {
-        const sizeVariant = await Size.findById(item.sizeVariant);
-        if (sizeVariant) {
-          sizeVariant.stockCount += item.quantity;
-          await sizeVariant.save();
+    const item = order.items.id(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
+    }
+
+    // If item is being cancelled, restore product quantities
+    if (newStatus === "Cancelled" && item.status !== "Cancelled") {
+      const sizeVariant = await Size.findById(item.sizeVariant).session(session);
+      if (sizeVariant) {
+        sizeVariant.stockCount += item.quantity;
+        if (sizeVariant.stockCount > 0) {
+          sizeVariant.inStock = true;
         }
+        await sizeVariant.save({ session });
       }
     }
 
-    // Update order status
-    order.orderStatus = newStatus;
-    await order.save();
+    // Update item status
+    item.status = newStatus;
+
+    // Check if all items are cancelled
+    const allCancelled = order.items.every((item) => item.status === "Cancelled");
+    if (allCancelled) {
+      order.orderStatus = "Cancelled";
+    } else {
+      order.orderStatus = order.items.some((item) => item.status === "Processing") ? "Processing" : "pending";
+    }
+
+    await order.save({ session });
+    await session.commitTransaction();
 
     res.status(200).json({
       success: true,
-      message: "Order status updated successfully",
+      message: "Item status updated successfully",
       order,
     });
   } catch (error) {
+    await session.abortTransaction();
     res.status(500).json({
       success: false,
-      message: "Error updating order status",
+      message: "Error updating item status",
       error: error.message,
     });
+  } finally {
+    session.endSession();
   }
 });
 
