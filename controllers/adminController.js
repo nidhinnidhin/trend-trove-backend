@@ -1,105 +1,110 @@
-const asyncHandler = require("express-async-handler");
-const Jwt = require("jsonwebtoken");
-const User = require("../models/userModel");
-const bcrypt = require("bcrypt");
-const cloudinary = require("../config/cloudinary");
+// const asyncHandler = require("express-async-handler");
+// const Jwt = require("jsonwebtoken");
+// const User = require("../models/userModel");
+// const bcrypt = require("bcrypt");
+// const cloudinary = require("../config/cloudinary");
 
-// Admin login
-const adminLogin = asyncHandler(async (req, res) => {
-  const EMAIL = "admin@gmail.com";
-  const PASSWORD = "admin@123";
-  const JWT_SECRET = process.env.JWT_SECRET || "1921u0030";
 
-  try {
-    const { email, password } = req.body;
+// const adminLogin = asyncHandler(async (req, res) => {
+//   const EMAIL = "admin@gmail.com";
+//   const PASSWORD = "admin@123";
+//   const JWT_SECRET = process.env.JWT_SECRET || "1921u0030";
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email format" });
-    }
+//   try {
+//     const { email, password } = req.body;
 
-    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
-    if (password.length < 8 || !specialCharRegex.test(password)) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 8 characters long and contain at least one special character.",
-      });
-    }
+//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//     if (!emailRegex.test(email)) {
+//       return res.status(400).json({ message: "Invalid email format" });
+//     }
 
-    if (email !== EMAIL || password !== PASSWORD) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+//     const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
+//     if (password.length < 8 || !specialCharRegex.test(password)) {
+//       return res.status(400).json({
+//         message:
+//           "Password must be at least 8 characters long and contain at least one special character.",
+//       });
+//     }
 
-    const token = Jwt.sign({ email }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
+//     if (email !== EMAIL || password !== PASSWORD) {
+//       return res.status(400).json({ message: "Invalid credentials" });
+//     }
 
-    res.status(200).json({ message: "Login successful", token });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-    console.log("Something went wrong..");
-  }
-});
+//     const token = Jwt.sign({ email, role: "admin" }, JWT_SECRET, {
+//       expiresIn: "1h",
+//     });
 
-// Block user
-const blockUser = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+//     res.cookie("adminToken", token, {
+//       httpOnly: true, 
+//       secure: process.env.NODE_ENV === "production", 
+//       sameSite: "strict", 
+//       maxAge: 60 * 60 * 1000, 
+//     });
 
-  try {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { isDeleted: true },
-      { new: true }
-    );
+//     res.status(200).json({ message: "Login successful" });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//     console.log("Something went wrong..");
+//   }
+// });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+// const blockUser = asyncHandler(async (req, res) => {
+//   const { userId } = req.params;
 
-    res.status(200).json({ message: "User blocked successfully", user });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Something went wrong while blocking user." });
-  }
-});
+//   try {
+//     const user = await User.findByIdAndUpdate(
+//       userId,
+//       { isDeleted: true },
+//       { new: true }
+//     );
 
-// Unblock user
-const unblockUser = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
 
-  try {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { isDeleted: false },
-      { new: true }
-    );
+//     res.status(200).json({ message: "User blocked successfully", user });
+//   } catch (err) {
+//     res
+//       .status(500)
+//       .json({ message: "Something went wrong while blocking user." });
+//   }
+// });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
 
-    res.status(200).json({ message: "User unblocked successfully", user });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Something went wrong while unblocking user." });
-  }
-});
+// const unblockUser = asyncHandler(async (req, res) => {
+//   const { userId } = req.params;
 
-// Admin list users
-const userList = asyncHandler(async (req, res) => {
-  try {
-    let users = await User.find({}).select("-password").sort({createdAt:-1}); 
-    if (users.length === 0) {
-      return res.status(404).json({ message: "No users found." });
-    }
-    res.status(200).json(users);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Something went wrong while fetching users." });
-  }
-});
+//   try {
+//     const user = await User.findByIdAndUpdate(
+//       userId,
+//       { isDeleted: false },
+//       { new: true }
+//     );
 
-module.exports = { adminLogin, userList, blockUser, unblockUser };
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     res.status(200).json({ message: "User unblocked successfully", user });
+//   } catch (err) {
+//     res
+//       .status(500)
+//       .json({ message: "Something went wrong while unblocking user." });
+//   }
+// });
+
+// const userList = asyncHandler(async (req, res) => {
+//   try {
+//     let users = await User.find({}).select("-password").sort({createdAt:-1}); 
+//     if (users.length === 0) {
+//       return res.status(404).json({ message: "No users found." });
+//     }
+//     res.status(200).json(users);
+//   } catch (err) {
+//     res
+//       .status(500)
+//       .json({ message: "Something went wrong while fetching users." });
+//   }
+// });
+
+// module.exports = { adminLogin, userList, blockUser, unblockUser };

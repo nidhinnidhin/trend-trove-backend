@@ -120,7 +120,7 @@ const getCart = async (req, res) => {
 };
 
 const deleteProductFromCart = asyncHandler(async (req, res) => {
-  const { productId, variantId, sizeVariantId } = req.body; // Receiving the IDs from the request body
+  const { productId, variantId, sizeVariantId } = req.body; 
 
   if (!productId || !variantId || !sizeVariantId) {
     return res.status(400).json({
@@ -129,14 +129,12 @@ const deleteProductFromCart = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Find the cart for the logged-in user
     const cart = await Cart.findOne({ user: req.user.id });
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // Find the index of the item in the cart to be removed
     const itemIndex = cart.items.findIndex(
       (item) =>
         item.product.toString() === productId &&
@@ -148,17 +146,14 @@ const deleteProductFromCart = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found in cart" });
     }
 
-    // Remove the item from the cart
     cart.items.splice(itemIndex, 1);
 
-    // Recalculate total items and total price
     cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
     cart.totalPrice = cart.items.reduce(
       (acc, item) => acc + item.totalPrice,
       0
     );
 
-    // Save the updated cart
     await cart.save();
 
     res.status(200).json({
@@ -184,7 +179,6 @@ const updateProductQuantity = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check that the quantity does not exceed the maximum limit
   if (quantity > 4) {
     return res
       .status(400)
@@ -192,14 +186,11 @@ const updateProductQuantity = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Find the cart for the logged-in user
     const cart = await Cart.findOne({ user: req.user.id });
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
-
-    // Find the index of the item in the cart to be updated
     const itemIndex = cart.items.findIndex(
       (item) =>
         item.product.toString() === productId &&
@@ -211,19 +202,16 @@ const updateProductQuantity = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found in cart" });
     }
 
-    // Update the quantity and total price for the item
     cart.items[itemIndex].quantity = quantity;
     cart.items[itemIndex].totalPrice =
       cart.items[itemIndex].quantity * cart.items[itemIndex].price;
 
-    // Recalculate total items and total price
     cart.totalItems = cart.items.reduce((acc, item) => acc + item.quantity, 0);
     cart.totalPrice = cart.items.reduce(
       (acc, item) => acc + item.totalPrice,
       0
     );
 
-    // Save the updated cart
     await cart.save();
 
     res.status(200).json({
@@ -237,22 +225,19 @@ const updateProductQuantity = asyncHandler(async (req, res) => {
 });
 
 const clearCart = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Get the logged-in user's ID
+  const userId = req.user.id; 
 
   try {
-    // Find the cart for the logged-in user
     const cart = await Cart.findOne({ user: userId });
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // Clear the items array in the cart
     cart.items = [];
     cart.totalItems = 0;
     cart.totalPrice = 0;
 
-    // Save the updated cart
     await cart.save();
 
     res.status(200).json({

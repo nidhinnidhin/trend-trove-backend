@@ -48,6 +48,7 @@ const getAllOrders = asyncHandler(async (req, res) => {
         quantity: item.quantity,
         price: item.price,
         image: item.variant?.mainImage,
+        status: item.status
       })),
       shippingAddress: order.shipping.address,
       shippingMethod: order.shipping.shippingMethod,

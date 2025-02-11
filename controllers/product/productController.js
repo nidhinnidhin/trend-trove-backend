@@ -3,14 +3,23 @@ const Variant = require("../../models/product/variantModel");
 const SizeVariant = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 
-
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
-    const { page = 1, limit = 5 } = req.query; 
+    const { page = 1, limit = 5, search = "", includeDeleted = false } = req.query;
     const skip = (page - 1) * limit;
 
-    const products = await Product.find({})
-      .sort({ createdAt: -1 }) 
+    const query = {};
+    
+    if (!includeDeleted) {
+      query.isDeleted = false;
+    }
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .populate("brand", "name")
@@ -23,18 +32,17 @@ const getAllProducts = asyncHandler(async (req, res) => {
         },
       });
 
-    const totalProducts = await Product.countDocuments({});
+    const totalProducts = await Product.countDocuments(query);
 
     res.status(200).json({
-      products, 
+      products,
       totalPages: Math.ceil(totalProducts / limit),
-      currentPage: parseInt(page), 
+      currentPage: parseInt(page),
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
   }
 });
-
 const getProductDetail = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
@@ -115,7 +123,7 @@ const searchProducts = asyncHandler(async (req, res) => {
           model: "SizeVariant",
         },
       })
-      .limit(10); 
+      .limit(10);
     res.status(200).json({
       success: true,
       count: products.length,
@@ -203,7 +211,7 @@ const searchAndFetchRelatedProducts = asyncHandler(async (req, res) => {
     const relatedProductsPromises = products.map(async (product) => {
       const relatedProducts = await Product.find({
         category: product.category._id,
-        _id: { $ne: product._id }, 
+        _id: { $ne: product._id },
       })
         .populate({
           path: "variants",
@@ -212,7 +220,7 @@ const searchAndFetchRelatedProducts = asyncHandler(async (req, res) => {
             model: "SizeVariant",
           },
         })
-        .limit(2); 
+        .limit(2);
 
       return {
         product,
@@ -236,7 +244,6 @@ const searchAndFetchRelatedProducts = asyncHandler(async (req, res) => {
     });
   }
 });
-
 
 module.exports = {
   getAllProducts,

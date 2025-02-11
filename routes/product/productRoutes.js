@@ -1,7 +1,9 @@
 const express = require("express");
 const { getAllProducts, getProductById, getProductDetail, fetchRelatedProducts, searchProducts, searchAndFetchRelatedProducts } = require("../../controllers/product/productController");
-
+const filterDeletedProducts = require('../../middleware/filterNotDeletedProducts')
 const router = express.Router();
+
+router.use(filterDeletedProducts);
 
 router.get("/get", getAllProducts);
 

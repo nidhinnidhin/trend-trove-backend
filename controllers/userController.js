@@ -416,6 +416,49 @@ const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
   }
 });
 
+const resetUserPassword = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id; // Get user ID from auth middleware
+    const { oldPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate password format
+    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
+    if (newPassword.length < 8 || !specialCharRegex.test(newPassword)) {
+      return res.status(400).json({
+        message: 'Password must be at least 8 characters long and contain at least one special character'
+      });
+    }
+
+    // Get user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify old password
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'An error occurred', error: err.message });
+  }
+});
+
 module.exports = {
   registerUser,
   loginUser,
@@ -425,4 +468,5 @@ module.exports = {
   forgotPasswordSendOtp,
   verifyForgotPasswordOtp,
   resendForgotPasswordOtp,
+  resetUserPassword
 };

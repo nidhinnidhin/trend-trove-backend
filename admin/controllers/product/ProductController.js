@@ -1,6 +1,77 @@
 const Product = require("../../../models/product/productModel");
 const asyncHandler = require("express-async-handler");
 
+// const getAllProducts = asyncHandler(async (req, res) => {
+//   try {
+//     const { page = 1, limit = 5 } = req.query;
+//     const skip = (page - 1) * limit;
+
+//     const products = await Product.find({})
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(parseInt(limit))
+//       .populate("brand", "name")
+//       .populate("category", "name")
+//       .populate({
+//         path: "variants",
+//         populate: {
+//           path: "sizes",
+//           model: "SizeVariant",
+//         },
+//       });
+
+//     const totalProducts = await Product.countDocuments({});
+
+//     res.status(200).json({
+//       products,
+//       totalPages: Math.ceil(totalProducts / limit),
+//       currentPage: parseInt(page),
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching products", error });
+//   }
+// });
+
+
+const getAllProductsAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { page = 1, limit = 5, search = "" } = req.query;
+    const skip = (page - 1) * limit;
+    
+    const query = {};
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      });
+
+    const totalProducts = await Product.countDocuments(query);
+
+    res.status(200).json({
+      products,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: parseInt(page),
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching products", error });
+  }
+});
+
+
+
 const addProduct = asyncHandler(async (req, res) => {
   try {
     const { name, description, category, brand, gender, material, pattern } =
@@ -82,17 +153,14 @@ const blockProduct = asyncHandler(async (req, res) => {
 
 const unBlockProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-
   try {
     const product = await Product.findById(id);
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-
     product.isDeleted = false;
     await product.save();
-
     res
       .status(200)
       .json({ message: "Product unblocked successfully", product });
@@ -108,4 +176,5 @@ module.exports = {
   updateProduct,
   blockProduct,
   unBlockProduct,
+  getAllProductsAdmin,
 };

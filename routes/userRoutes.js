@@ -8,6 +8,7 @@ const {
   resetPassword,
   verifyForgotPasswordOtp,
   resendForgotPasswordOtp,
+  resetUserPassword,
 } = require("../controllers/userController");
 const { upload } = require("../middleware/multer");
 const passport = require("passport");
@@ -19,6 +20,7 @@ const router = express.Router();
 router.post("/register", upload.single("image"), registerUser);
 router.post("/login", loginUser);
 router.get("/profile", authMiddleware, getUserProfile);
+router.post('/reset-password', authMiddleware, resetUserPassword);
 router.post('/forgot-password-send-otp', forgotPasswordSendOtp);
 router.post('/reset-password', resetPassword);
 router.post("/verify-forgot-password-otp", verifyForgotPasswordOtp);
