@@ -48,11 +48,11 @@ app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);
 app.use("/api/products/", userProductRoutes);
 app.use("/api/admin/products/", adminProductRoutes);
-app.use("/api/brands/", userBrandRoutes); // Add brand routes
-app.use("/api/admin/brands/", adminBrandRoutes); // Add brand routes
+app.use("/api/brands/", userBrandRoutes); 
+app.use("/api/admin/brands/", adminBrandRoutes);
 app.use("/api/categories/", userCategoryRoutes);
 app.use("/api/admin/categories/", adminCategoryRoutes);
-app.use("/api/otp/", otpRoutes); //otp
+app.use("/api/otp/", otpRoutes); 
 app.use("/api/variants/", userColorVariantRoutes);
 app.use("/api/admin/variants/", adminColorVariantRoutes);
 app.use("/api/sizes/", userSizeVariantRoutes);

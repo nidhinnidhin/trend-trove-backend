@@ -19,7 +19,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Signup view
 const registerUser = asyncHandler(async (req, res) => {
   console.log("Body: ", req.body);
   console.log("File: ", req.file);
@@ -118,7 +117,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const token = Jwt.sign(
       { id: user._id, username, email },
       process.env.JWT_SECRET || "1921u0030",
-      { expiresIn: "1h" }
+      { expiresIn: "30d" }
     );
 
     res.status(201).json({ message: "User registered successfully", token });
@@ -127,7 +126,6 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 });
 
-// Login user view
 const loginUser = asyncHandler(async (req, res) => {
   const JWT_SECRET = process.env.JWT_SECRET || "1921u0030";
   try {
@@ -162,7 +160,7 @@ const loginUser = asyncHandler(async (req, res) => {
     const token = Jwt.sign(
       { id: existUser._id, email: existUser.email },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "30d" }
     );
 
     res.status(200).json({ message: "Login successful", token });
@@ -292,7 +290,6 @@ const forgotPasswordSendOtp = asyncHandler(async (req, res) => {
   }
 });
 
-// Verify OTP and update password
 const resetPassword = asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
@@ -375,7 +372,6 @@ const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
   }
 });
 
-// Resend OTP for forgot password
 const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
