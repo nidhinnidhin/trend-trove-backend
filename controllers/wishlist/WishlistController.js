@@ -97,7 +97,7 @@ const getWishlist = asyncHandler(async (req, res) => {
 
     res.status(200).json({
       message: "Wishlist retrieved successfully",
-      Wishlist: wishlist.items, // Changed 'Wishlist' to 'wishlist'
+      Wishlist: wishlist.items, 
     });
   } catch (error) {
     console.error("Error fetching Wishlist:", error);
@@ -105,5 +105,56 @@ const getWishlist = asyncHandler(async (req, res) => {
   }
 });
 
+const deleteProductFromWhishlist = asyncHandler(async (req, res) => {
+  console.log("Hitetedd");
 
-module.exports = { addToWishlist, getWishlist };
+  console.log("Userrrrrr", req.user.id);
+
+  const { productId, variantId, sizeVariantId } = req.body;
+
+  if (!productId || !variantId || !sizeVariantId) {
+    return res.status(400).json({
+      message: "Product ID, Variant ID, and Size Variant ID are required",
+    });
+  }
+
+  try {
+    const wishlist = await Wishlist.findOne({ user: req.user.id });
+
+    if (!wishlist) {
+      return res.status(404).json({ message: "Wishlist not found" });
+    }
+
+    const itemIndex = wishlist.items.findIndex(
+      (item) =>
+        item.product.toString() === productId &&
+        item.variant.toString() === variantId &&
+        item.sizeVariant.toString() === sizeVariantId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: "Product not found in wishlist" });
+    }
+
+    // Remove the item from the wishlist
+    wishlist.items.splice(itemIndex, 1);
+
+    // Update totalItems to the length of the items array
+    wishlist.totalItems = wishlist.items.length;
+
+    // Save the updated wishlist
+    await wishlist.save();
+
+    res.status(200).json({
+      message: "Product removed from wishlist successfully",
+      wishlist,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Error removing product from wishlist",
+      error: error.message,
+    });
+  }
+});
+module.exports = { addToWishlist, getWishlist, deleteProductFromWhishlist };

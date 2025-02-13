@@ -23,6 +23,7 @@ const WishlistSchema = new mongoose.Schema(
         addedAt: { type: Date, default: Date.now },
       },
     ],
+    totalItems: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
