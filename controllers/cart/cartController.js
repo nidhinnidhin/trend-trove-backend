@@ -89,7 +89,7 @@ const getCart = async (req, res) => {
     const cart = await Cart.findOne({ user: userId })
       .populate({
         path: "items.product",
-        select: "name description price category brand",
+        select: "name description price category brand isDeleted",
       })
       .populate({
         path: "items.variant",
@@ -107,7 +107,8 @@ const getCart = async (req, res) => {
     cart.items = cart.items.sort(
       (a, b) => new Date(b._id.getTimestamp()) - new Date(a._id.getTimestamp())
     );
-
+    
+    
     return res
       .status(200)
       .json({ message: "Cart retrieved successfully", cart });

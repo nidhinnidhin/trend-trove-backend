@@ -1,4 +1,3 @@
-// models/Brand.js
 const mongoose = require('mongoose');
 
 const BrandSchema = new mongoose.Schema({
@@ -8,4 +7,4 @@ const BrandSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Brand = mongoose.model('Brand', BrandSchema);
-module.exports = Brand;
+module.exports = Brand

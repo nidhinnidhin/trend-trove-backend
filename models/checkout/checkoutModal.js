@@ -39,6 +39,11 @@ const checkoutSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        finalPrice: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
         status: {
           type: String,
           default: "pending",
@@ -59,6 +64,11 @@ const checkoutSchema = new mongoose.Schema(
         type: String,
         required: true,
         enum: ["Standard", "Express"],
+      },
+      deliveryCharge: {
+        type: Number,
+        default: 0,
+        min: 0,
       },
     },
     payment: {
@@ -90,11 +100,18 @@ const checkoutSchema = new mongoose.Schema(
       enum: ["pending", "Processing", "Delivered", "Cancelled"],
     },
     reason: {
-      type: String
+      type: String,
     },
     totalAmount: {
       type: Number,
       required: true,
+    },
+    couponCode: {
+      type: String,
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
     },
   },
   {

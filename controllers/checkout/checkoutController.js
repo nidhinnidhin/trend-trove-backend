@@ -7,31 +7,31 @@ const { mongoose } = require("mongoose");
 
 const orderPopulateConfig = [
   {
-    path: 'user',
-    select: 'name email'
+    path: "user",
+    select: "name email",
   },
   {
-    path: 'items.product',
-    select: 'name price'
+    path: "items.product",
+    select: "name price",
   },
   {
-    path: 'items.variant',
-    select: 'color mainImage'
+    path: "items.variant",
+    select: "color mainImage",
   },
   {
-    path: 'items.sizeVariant',
-    select: 'size price stockCount'
+    path: "items.sizeVariant",
+    select: "size price stockCount",
   },
   {
-    path: 'shipping.address',
-    select: 'fullName address city state pincode mobileNumber addressType'
-  }
+    path: "shipping.address",
+    select: "fullName address city state pincode mobileNumber addressType",
+  },
 ];
 
 const createCheckout = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const {
       cartId,
@@ -40,18 +40,31 @@ const createCheckout = asyncHandler(async (req, res) => {
       paymentMethod,
       transactionId,
       paymentStatus,
+      finalTotal,
+      couponCode,
+      discountAmount, 
     } = req.body;
 
-    if (!cartId || !addressId || !shippingMethod || !paymentMethod || !transactionId || !paymentStatus) {
+    if (
+      !cartId ||
+      !addressId ||
+      !shippingMethod ||
+      !paymentMethod ||
+      !transactionId ||
+      !paymentStatus ||
+      !finalTotal 
+    ) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const cart = await Cart.findById(cartId)
-      .populate([
-        { path: 'items.product', select: 'name price' },
-        { path: 'items.variant', select: 'color mainImage' },
-        { path: 'items.sizeVariant', select: 'size price stockCount' }
-      ]);
+    const cart = await Cart.findById(cartId).populate([
+      { path: "items.product", select: "name price" },
+      { path: "items.variant", select: "color mainImage" },
+      {
+        path: "items.sizeVariant",
+        select: "size price stockCount discountPrice",
+      },
+    ]);
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
@@ -62,9 +75,7 @@ const createCheckout = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Address not found" });
     }
 
-    const totalAmount = cart.totalPrice;
-    const shippingCost = shippingMethod === "Express" ? 15 : 5;
-    const finalAmount = totalAmount + shippingCost;
+    const deliveryCharge = finalTotal < 1000 ? 40 : 0;
 
     const newCheckout = new Checkout({
       user: req.user.id,
@@ -75,28 +86,31 @@ const createCheckout = asyncHandler(async (req, res) => {
         sizeVariant: item.sizeVariant._id,
         quantity: item.quantity,
         price: item.sizeVariant.price,
-        status: 'pending'
+        finalPrice: item.sizeVariant.discountPrice * item.quantity, 
+        status: "pending",
       })),
       shipping: {
         address: addressId,
         shippingMethod,
+        deliveryCharge,
       },
       payment: {
         method: paymentMethod,
         status: paymentStatus,
         transactionId,
-        amount: finalAmount,
+        amount: finalTotal,
         paymentDate: new Date(),
       },
+      couponCode: couponCode || null,
+      discountAmount: discountAmount || 0, 
+      totalAmount: finalTotal,
       orderStatus: "pending",
-      totalAmount: finalAmount,
     });
+
     await newCheckout.save({ session });
 
     for (const item of cart.items) {
       const sizeVariant = await Size.findById(item.sizeVariant._id);
-      console.log("------------",sizeVariant.stockCount );
-      
       if (sizeVariant) {
         sizeVariant.stockCount -= item.quantity;
         if (sizeVariant.stockCount <= 0) {
@@ -105,28 +119,30 @@ const createCheckout = asyncHandler(async (req, res) => {
         await sizeVariant.save({ session });
       }
     }
+
     cart.items = [];
     cart.totalPrice = 0;
     cart.isActive = false;
     await cart.save({ session });
 
     await session.commitTransaction();
-    const completedOrder = await Checkout.findById(newCheckout._id)
-      .populate(orderPopulateConfig);
+
+    const completedOrder = await Checkout.findById(newCheckout._id).populate(
+      orderPopulateConfig
+    );
 
     res.status(201).json({
       success: true,
       message: "Checkout completed successfully",
-      order: completedOrder
+      order: completedOrder,
     });
-
   } catch (error) {
     await session.abortTransaction();
     console.error(error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error completing checkout", 
-      error: error.message 
+      message: "Error completing checkout",
+      error: error.message,
     });
   } finally {
     session.endSession();
@@ -155,19 +171,24 @@ const getOrders = asyncHandler(async (req, res) => {
       payment: {
         method: order.payment.method,
         status: order.payment.status,
-        amount: order.payment.amount,
+        amount: order.totalAmount,
       },
       items: order.items.map((item) => ({
         itemId: item._id,
         status: item.status,
         productName: item.product?.name || "N/A",
-        price: item.sizeVariant?.price || 0,
+        price: item.price || 0, 
+        finalPrice: item.finalPrice || 0, 
         quantity: item.quantity,
         color: item.variant?.color || "N/A",
         size: item.sizeVariant?.size || "N/A",
         image: item.variant?.mainImage || "N/A",
       })),
       totalAmount: order.totalAmount,
+      deliveryCharge: order.shipping.deliveryCharge,
+      couponCode: order.couponCode,
+      discountAmount: order.discountAmount || 0,
+      subTotal: order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
     }));
 
     res.status(200).json({

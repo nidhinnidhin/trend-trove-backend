@@ -20,6 +20,9 @@ const addressRoutes = require("./routes/address/addressRoutes");
 const userCheckoutRoutes = require("./routes/checkout/checkoutRoutes");
 const adminCheckoutRoutes = require("./admin/routes/checkout/CheckoutRoutes");
 const userWishlistRoutes = require("./routes/wishlist/wishlistRoutes")
+const adminCouponRoutes = require("./admin/routes/coupon/couponRoutes")
+const userCouponRoutes = require("./routes/coupon/couponRoutes")
+const adminOfferRoutes = require('./admin/routes/offer/offerRoutes')
 const otpRoutes = require("./routes/otp/signupOtpRoutes");
 const bodyParser = require("body-parser");
 const passport = require("passport");
@@ -62,12 +65,13 @@ app.use("/api/address/", addressRoutes);
 app.use("/api/checkout/", userCheckoutRoutes);
 app.use("/api/admin/checkout/", adminCheckoutRoutes);
 app.use("/api/user/wishlist/", userWishlistRoutes);
+app.use("/api/admin/coupon/", adminCouponRoutes)
+app.use("/api/coupon/", userCouponRoutes)
+app.use("/api/admin/offer/", adminOfferRoutes)
 
-// app.use('/api/review/', addReview); //otp
 
-// Mongodb Connection
 connectDb();
-
+    
 app.get("/", (req, res) => {
   res.send("Hello world");
 });

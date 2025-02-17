@@ -15,3 +15,10 @@ const SizeVariantSchema = new mongoose.Schema(
 
 const SizeVariant = mongoose.model('SizeVariant', SizeVariantSchema);
 module.exports = SizeVariant;
+
+
+
+
+
+
+
