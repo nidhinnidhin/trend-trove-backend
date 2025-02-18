@@ -27,7 +27,6 @@ const updateProductPrices = async (productIds, discountPercentage) => {
   }
 };
 
-// Helper function to update category prices
 const updateCategoryPrices = async (categoryIds, discountPercentage) => {
   const products = await Product.find({
     category: { $in: categoryIds },
@@ -77,10 +76,74 @@ const resetProductPrices = async (productIds) => {
   );
 };
 
-// Helper function to reset category prices
 const resetCategoryPrices = async (categoryIds) => {
   const products = await Product.find({ category: { $in: categoryIds } });
   await resetProductPrices(products.map((p) => p._id));
 };
 
-module.exports = {resetCategoryPrices, resetProductPrices, updateOfferStatus,updateCategoryPrices, updateProductPrices}
+const checkActiveOffers = async (product) => {
+  const now = new Date();
+
+  // Check product-specific offers
+  const productOffer = await Offer.findOne({
+    offerType: "product",
+    items: product._id,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    isActive: true,
+  });
+
+  // Check category offers
+  const categoryOffer = await Offer.findOne({
+    offerType: "category",
+    items: product.category,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    isActive: true,
+  });
+
+  // Return the offer with higher discount if both exist
+  if (productOffer && categoryOffer) {
+    return productOffer.discountPercentage > categoryOffer.discountPercentage
+      ? productOffer
+      : categoryOffer;
+  }
+
+  return productOffer || categoryOffer || null;
+};
+
+const checkExpiredOffers = async () => {
+    const now = new Date();
+  
+    // Find expired offers
+    const expiredOffers = await Offer.find({
+      endDate: { $lt: now },
+      isActive: true,
+    });
+  
+    // Reset prices for expired offers
+    for (const offer of expiredOffers) {
+      if (offer.offerType === "product") {
+        await resetProductPrices(offer.items);
+      } else {
+        await resetCategoryPrices(offer.items);
+      }
+  
+      // Mark offer as inactive
+      offer.isActive = false;
+      await offer.save();
+    }
+  };
+  
+  // Schedule the task to run every minute
+  setInterval(checkExpiredOffers, 60000);
+
+module.exports = {
+  resetCategoryPrices,
+  resetProductPrices,
+  updateOfferStatus,
+  updateCategoryPrices,
+  updateProductPrices,
+  checkActiveOffers,
+  checkExpiredOffers
+};

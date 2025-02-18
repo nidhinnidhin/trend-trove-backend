@@ -4,6 +4,9 @@ const asyncHandler = require("express-async-handler");
 const {
   updateProductPrices,
   updateCategoryPrices,
+  resetProductPrices,
+  resetCategoryPrices,
+  updateOfferStatus,
 } = require("../../helper/offerHelpers");
 
 const addOffer = asyncHandler(async (req, res) => {
@@ -61,6 +64,52 @@ const getOffers = asyncHandler(async (req, res) => {
     res
       .status(500)
       .json({ message: "Error fetching offers", error: error.message });
+  }
+});
+
+const resetOffer = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const offer = await Offer.findById(id);
+
+    if (!offer) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
+
+    // Reset prices based on offer type
+    if (offer.offerType === "product") {
+      await resetProductPrices(offer.items);
+    } else {
+      await resetCategoryPrices(offer.items);
+    }
+
+    // Update offer status
+    offer.isActive = false;
+    await offer.save();
+
+    res.status(200).json({
+      message: "Offer reset successfully",
+      offer,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error resetting offer",
+      error: error.message,
+    });
+  }
+});
+
+const checkExpiredOffers = asyncHandler(async (req, res) => {
+  try {
+    await updateOfferStatus();
+    res.status(200).json({
+      message: "Expired offers checked and updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error checking expired offers",
+      error: error.message,
+    });
   }
 });
 
@@ -136,4 +185,11 @@ const deleteOffer = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { addOffer, getOffers, editOffer, deleteOffer };
+module.exports = {
+  addOffer,
+  getOffers,
+  editOffer,
+  deleteOffer,
+  resetOffer,
+  checkExpiredOffers,
+};

@@ -2,6 +2,7 @@ const Product = require("../../models/product/productModel");
 const Variant = require("../../models/product/variantModel");
 const SizeVariant = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
+const { checkActiveOffers } = require("../../admin/helper/offerHelpers");
 
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
@@ -34,8 +35,21 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
     const totalProducts = await Product.countDocuments(query);
 
+    const productsWithOffers = await Promise.all(
+      products.map(async (product) => {
+        const activeOffer = await checkActiveOffers(product);
+        return {
+          ...product._doc,
+          activeOffer: activeOffer ? {
+            discountPercentage: activeOffer.discountPercentage,
+            offerName: activeOffer.offerName
+          } : null
+        };
+      })
+    );
+
     res.status(200).json({
-      products,
+      products: productsWithOffers,
       totalPages: Math.ceil(totalProducts / limit),
       currentPage: parseInt(page),
     });
