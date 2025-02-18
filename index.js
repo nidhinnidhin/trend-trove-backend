@@ -2,6 +2,8 @@ const express = require("express");
 const connectDb = require("./db/connection");
 const app = express();
 const cors = require("cors");
+const { updateOfferStatus } = require('./admin/helper/offerHelpers')
+const cron = require('node-cron');
 const userRoutes = require("./routes/userRoutes");
 // const adminRoutes = require("./routes/adminRoutes");
 const adminRoutes = require("./admin/routes/authentication/AdminRoutes");
@@ -46,6 +48,11 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+cron.schedule('0 * * * *', async () => {
+  await updateOfferStatus();
+  console.log('Running offer status update...');
+});
 
 app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);

@@ -4,13 +4,81 @@ const SizeVariant = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 const { checkActiveOffers } = require("../../admin/helper/offerHelpers");
 
+// const getAllProducts = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 5,
+//       search = "",
+//       includeDeleted = false,
+//     } = req.query;
+//     const skip = (page - 1) * limit;
+
+//     const query = {};
+
+//     if (!includeDeleted) {
+//       query.isDeleted = false;
+//     }
+
+//     if (search) {
+//       query.name = { $regex: search, $options: "i" };
+//     }
+
+//     const products = await Product.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(parseInt(limit))
+//       .populate("brand", "name")
+//       .populate("category", "name")
+//       .populate("activeOffer", "offerName discountPercentage startDate endDate")
+//       .populate({
+//         path: "variants",
+//         populate: {
+//           path: "sizes",
+//           model: "SizeVariant",
+//         },
+//       });
+
+//     const totalProducts = await Product.countDocuments(query);
+
+//     const productsWithOffers = await Promise.all(
+//       products.map(async (product) => {
+//         const activeOffer = await checkActiveOffers(product);
+//         return {
+//           ...product._doc,
+//           activeOffer: activeOffer
+//             ? {
+//                 discountPercentage: activeOffer.discountPercentage,
+//                 offerName: activeOffer.offerName,
+//               }
+//             : null,
+//           price: activeOffer ? product.discountedPrice : product.price, // Display discounted price if offer exists
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       products: productsWithOffers,
+//       totalPages: Math.ceil(totalProducts / limit),
+//       currentPage: parseInt(page),
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching products", error });
+//   }
+// });
+
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
-    const { page = 1, limit = 5, search = "", includeDeleted = false } = req.query;
+    const {
+      page = 1,
+      limit = 5,
+      search = "",
+      includeDeleted = false,
+    } = req.query;
     const skip = (page - 1) * limit;
 
     const query = {};
-    
+
     if (!includeDeleted) {
       query.isDeleted = false;
     }
@@ -19,6 +87,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
       query.name = { $regex: search, $options: "i" };
     }
 
+    // First, get the products without populating activeOffer to avoid issues
     const products = await Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -31,22 +100,32 @@ const getAllProducts = asyncHandler(async (req, res) => {
           path: "sizes",
           model: "SizeVariant",
         },
-      });
+      })
+      .populate("activeOffer")
 
     const totalProducts = await Product.countDocuments(query);
 
-    const productsWithOffers = await Promise.all(
-      products.map(async (product) => {
-        const activeOffer = await checkActiveOffers(product);
+    // Safely process products to include offer information
+    const productsWithOffers = products.map(product => {
+      const productObj = product.toObject();
+      
+      // Check if there's an active offer reference but don't try to access it yet
+      if (productObj.activeOffer) {
+        // Safely populate with basic information
         return {
-          ...product._doc,
-          activeOffer: activeOffer ? {
-            discountPercentage: activeOffer.discountPercentage,
-            offerName: activeOffer.offerName
-          } : null
+          ...productObj,
+          activeOffer: {
+            _id: productObj.activeOffer,
+            // Don't include other fields until we properly populate
+          }
         };
-      })
-    );
+      }
+      
+      return {
+        ...productObj,
+        activeOffer: null
+      };
+    });
 
     res.status(200).json({
       products: productsWithOffers,
@@ -54,9 +133,55 @@ const getAllProducts = asyncHandler(async (req, res) => {
       currentPage: parseInt(page),
     });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching products", error });
+    console.error("Error in getAllProducts:", error);
+    res.status(500).json({ 
+      message: "Error fetching products", 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+    });
   }
 });
+
+// const getProductDetail = asyncHandler(async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const product = await Product.findById(id)
+//       .populate("category", "name")
+//       .populate("brand", "name")
+//       .populate({
+//         path: "variants",
+//         populate: {
+//           path: "sizes",
+//           model: "SizeVariant",
+//         },
+//       });
+
+//     if (!product) {
+//       return res.status(404).json({ message: "Product not found." });
+//     }
+
+//     // Get active offer for this product if any
+//     const activeOffer = await checkActiveOffers(product);
+//     const productWithOffer = {
+//       ...product._doc,
+//       activeOffer: activeOffer
+//         ? {
+//             discountPercentage: activeOffer.discountPercentage,
+//             offerName: activeOffer.offerName,
+//           }
+//         : null,
+//     };
+
+//     res.status(200).json({
+//       message: "Product details retrieved successfully",
+//       product: productWithOffer,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching product details", error });
+//   }
+// });
+
 const getProductDetail = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
@@ -76,9 +201,21 @@ const getProductDetail = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found." });
     }
 
+    // Get active offer for this product if any
+    const activeOffer = await checkActiveOffers(product);
+    const productWithOffer = {
+      ...product._doc,
+      activeOffer: activeOffer
+        ? {
+            discountPercentage: activeOffer.discountPercentage,
+            offerName: activeOffer.offerName,
+          }
+        : null,
+    };
+
     res.status(200).json({
       message: "Product details retrieved successfully",
-      product,
+      product: productWithOffer,
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching product details", error });

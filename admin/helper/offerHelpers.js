@@ -1,149 +1,68 @@
 const Offer = require("../../models/offers/offerModal");
-const Product = require("../../models//product/productModel");
-const Category = require("../../models/product/categoryModel");
-const SizeVariant = require("../../models/product/sizesVariantModel");
+const Product = require("../../models/product/productModel");
 
-const updateProductPrices = async (productIds, discountPercentage) => {
-  const products = await Product.find({ _id: { $in: productIds } }).populate({
-    path: "variants",
-    populate: {
-      path: "sizes",
-      model: "SizeVariant",
-    },
-  });
 
-  for (const product of products) {
-    for (const variant of product.variants) {
-      for (const size of variant.sizes) {
-        const originalPrice = size.price;
-        const discountAmount = (originalPrice * discountPercentage) / 100;
-        const newDiscountPrice = Math.round(originalPrice - discountAmount);
+const updateOfferStatus = async () => {
+  const currentDate = new Date();
+  try {
+    await Offer.updateMany(
+      { endDate: { $lt: currentDate }, isActive: true },
+      { $set: { isActive: false } }
+    );
 
-        await SizeVariant.findByIdAndUpdate(size._id, {
-          discountPrice: newDiscountPrice,
-        });
-      }
-    }
+    await Offer.updateMany(
+      {
+        startDate: { $lte: currentDate },
+        endDate: { $gte: currentDate },
+        isActive: false,
+      },
+      { $set: { isActive: true } }
+    );
+
+    console.log("Offer statuses updated successfully");
+  } catch (error) {
+    console.error("Error updating offer statuses:", error);
   }
 };
 
-const updateCategoryPrices = async (categoryIds, discountPercentage) => {
-  const products = await Product.find({
-    category: { $in: categoryIds },
-  }).populate({
-    path: "variants",
-    populate: {
-      path: "sizes",
-      model: "SizeVariant",
-    },
-  });
-
-  await updateProductPrices(
-    products.map((p) => p._id),
-    discountPercentage
-  );
-};
-
-// Scheduled task to check and update offer status
-const updateOfferStatus = async () => {
+const checkExpiredOffers = async () => {
   const now = new Date();
 
-  // Find expired offers
   const expiredOffers = await Offer.find({
     endDate: { $lt: now },
     isActive: true,
   });
 
-  // Reset prices for expired offers
   for (const offer of expiredOffers) {
-    if (offer.offerType === "product") {
-      await resetProductPrices(offer.items);
-    } else {
-      await resetCategoryPrices(offer.items);
-    }
-
-    // Mark offer as inactive
     offer.isActive = false;
     await offer.save();
   }
 };
 
-// Helper function to reset product prices
-const resetProductPrices = async (productIds) => {
-  await SizeVariant.updateMany(
-    { variant: { $in: productIds } },
-    { $set: { discountPrice: null } }
-  );
-};
-
-const resetCategoryPrices = async (categoryIds) => {
-  const products = await Product.find({ category: { $in: categoryIds } });
-  await resetProductPrices(products.map((p) => p._id));
-};
-
 const checkActiveOffers = async (product) => {
-  const now = new Date();
+  const currentDate = new Date();
 
-  // Check product-specific offers
-  const productOffer = await Offer.findOne({
-    offerType: "product",
+  const activeProductOffer = await Offer.findOne({
     items: product._id,
-    startDate: { $lte: now },
-    endDate: { $gte: now },
+    offerType: 'product',
+    startDate: { $lte: currentDate },
+    endDate: { $gte: currentDate },
     isActive: true,
-  });
+  }).sort({ startDate: -1 });
 
-  // Check category offers
-  const categoryOffer = await Offer.findOne({
-    offerType: "category",
+  const activeCategoryOffer = await Offer.findOne({
     items: product.category,
-    startDate: { $lte: now },
-    endDate: { $gte: now },
+    offerType: 'category',
+    startDate: { $lte: currentDate },
+    endDate: { $gte: currentDate },
     isActive: true,
-  });
+  }).sort({ startDate: -1 });
 
-  // Return the offer with higher discount if both exist
-  if (productOffer && categoryOffer) {
-    return productOffer.discountPercentage > categoryOffer.discountPercentage
-      ? productOffer
-      : categoryOffer;
-  }
-
-  return productOffer || categoryOffer || null;
+  return activeProductOffer || activeCategoryOffer;
 };
-
-const checkExpiredOffers = async () => {
-    const now = new Date();
-  
-    // Find expired offers
-    const expiredOffers = await Offer.find({
-      endDate: { $lt: now },
-      isActive: true,
-    });
-  
-    // Reset prices for expired offers
-    for (const offer of expiredOffers) {
-      if (offer.offerType === "product") {
-        await resetProductPrices(offer.items);
-      } else {
-        await resetCategoryPrices(offer.items);
-      }
-  
-      // Mark offer as inactive
-      offer.isActive = false;
-      await offer.save();
-    }
-  };
-  
-  // Schedule the task to run every minute
-  setInterval(checkExpiredOffers, 60000);
 
 module.exports = {
-  resetCategoryPrices,
-  resetProductPrices,
-  updateOfferStatus,
-  updateCategoryPrices,
-  updateProductPrices,
   checkActiveOffers,
-  checkExpiredOffers
+  updateOfferStatus,
+  checkExpiredOffers,
 };

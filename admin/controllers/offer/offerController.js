@@ -1,28 +1,25 @@
 const express = require("express");
 const Offer = require("../../../models/offers/offerModal");
 const asyncHandler = require("express-async-handler");
-const {
-  updateProductPrices,
-  updateCategoryPrices,
-  resetProductPrices,
-  resetCategoryPrices,
-  updateOfferStatus,
-} = require("../../helper/offerHelpers");
+const Product = require("../../../models/product/productModel");
+const Variant = require("../../../models/product/variantModel");
+const SizeVariant = require("../../../models/product/sizesVariantModel");
 
 const addOffer = asyncHandler(async (req, res) => {
   try {
-    const { offerName, offerType, discountValue, startDate, endDate, items } =
-      req.body;
+    const {
+      offerName,
+      offerType,
+      discountPercentage,
+      startDate,
+      endDate,
+      items,
+    } = req.body;
 
     const now = new Date();
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    if (start < now) {
-      return res
-        .status(400)
-        .json({ message: "Start date must be in the future" });
-    }
     if (end <= start) {
       return res
         .status(400)
@@ -32,16 +29,57 @@ const addOffer = asyncHandler(async (req, res) => {
     const offer = await Offer.create({
       offerName,
       offerType,
-      discountPercentage: discountValue,
-      startDate,
-      endDate,
+      discountPercentage,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
       items,
+      isActive: start <= now && end >= now,
     });
 
     if (offerType === "product") {
-      await updateProductPrices(items, discountValue);
-    } else {
-      await updateCategoryPrices(items, discountValue);
+      const products = await Product.find({ _id: { $in: items } });
+      for (const product of products) {
+        product.activeOffer = {
+          _id: offer._id,
+          discountPercentage: offer.discountPercentage,
+          offerName: offer.offerName,
+        };
+        await product.save();
+
+        const variants = await Variant.find({ product: product._id });
+        for (const variant of variants) {
+          const sizes = await SizeVariant.find({ variant: variant._id });
+          for (const size of sizes) {
+            const originalPrice = size.price;
+            size.discountPrice = Math.round(
+              originalPrice * (1 - offer.discountPercentage / 100)
+            );
+            await size.save();
+          }
+        }
+      }
+    } else if (offerType === "category") {
+      const products = await Product.find({ category: { $in: items } });
+      for (const product of products) {
+        product.activeOffer = {
+          _id: offer._id,
+          discountPercentage: offer.discountPercentage,
+          offerName: offer.offerName,
+        };
+        await product.save();
+
+        const variants = await Variant.find({ product: product._id });
+        for (const variant of variants) {
+          const sizes = await SizeVariant.find({ variant: variant._id });
+          for (const size of sizes) {
+            const originalPrice = size.price;
+            size.discountPrice = Math.round(
+              originalPrice * (1 - offer.discountPercentage / 100)
+            );
+            await size.save();
+          }
+        }
+      }
     }
 
     res.status(201).json({
@@ -56,64 +94,6 @@ const addOffer = asyncHandler(async (req, res) => {
   }
 });
 
-const getOffers = asyncHandler(async (req, res) => {
-  try {
-    const offers = await Offer.find();
-    res.status(200).json({ offers });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching offers", error: error.message });
-  }
-});
-
-const resetOffer = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const offer = await Offer.findById(id);
-
-    if (!offer) {
-      return res.status(404).json({ message: "Offer not found" });
-    }
-
-    // Reset prices based on offer type
-    if (offer.offerType === "product") {
-      await resetProductPrices(offer.items);
-    } else {
-      await resetCategoryPrices(offer.items);
-    }
-
-    // Update offer status
-    offer.isActive = false;
-    await offer.save();
-
-    res.status(200).json({
-      message: "Offer reset successfully",
-      offer,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error resetting offer",
-      error: error.message,
-    });
-  }
-});
-
-const checkExpiredOffers = asyncHandler(async (req, res) => {
-  try {
-    await updateOfferStatus();
-    res.status(200).json({
-      message: "Expired offers checked and updated successfully",
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error checking expired offers",
-      error: error.message,
-    });
-  }
-});
-
-// Edit Offer
 const editOffer = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,11 +104,6 @@ const editOffer = asyncHandler(async (req, res) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    if (start < now) {
-      return res
-        .status(400)
-        .json({ message: "Start date must be in the future" });
-    }
     if (end <= start) {
       return res
         .status(400)
@@ -144,12 +119,20 @@ const editOffer = asyncHandler(async (req, res) => {
         startDate,
         endDate,
         items,
+        isActive: start <= now && end >= now,
       },
       { new: true }
     );
 
     if (!offer) {
       return res.status(404).json({ message: "Offer not found" });
+    }
+
+    if (offerType === "product") {
+      await Product.updateMany(
+        { _id: { $in: items } },
+        { activeOffer: offer._id }
+      );
     }
 
     res.status(200).json({
@@ -164,7 +147,66 @@ const editOffer = asyncHandler(async (req, res) => {
   }
 });
 
-// Delete Offer
+const resetOffer = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const offer = await Offer.findById(id);
+
+    if (!offer) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
+
+    // Deactivate the offer
+    offer.isActive = false;
+    await offer.save();
+
+    // Update products affected by the offer
+    if (offer.offerType === "product") {
+      // For product-specific offers
+      const products = await Product.find({ _id: { $in: offer.items } });
+      for (const product of products) {
+        product.activeOffer = null;
+        await product.save();
+
+        const variants = await Variant.find({ product: product._id });
+        for (const variant of variants) {
+          const sizes = await SizeVariant.find({ variant: variant._id });
+          for (const size of sizes) {
+            size.discountPrice = size.price; // Revert to original price
+            await size.save();
+          }
+        }
+      }
+    } else if (offer.offerType === "category") {
+      // For category-specific offers
+      const products = await Product.find({ category: { $in: offer.items } });
+      for (const product of products) {
+        product.activeOffer = null;
+        await product.save();
+
+        const variants = await Variant.find({ product: product._id });
+        for (const variant of variants) {
+          const sizes = await SizeVariant.find({ variant: variant._id });
+          for (const size of sizes) {
+            size.discountPrice = size.price; // Revert to original price
+            await size.save();
+          }
+        }
+      }
+    }
+
+    res.status(200).json({
+      message: "Offer reset successfully",
+      offer,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error resetting offer",
+      error: error.message,
+    });
+  }
+});
+
 const deleteOffer = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
@@ -173,6 +215,11 @@ const deleteOffer = asyncHandler(async (req, res) => {
     if (!offer) {
       return res.status(404).json({ message: "Offer not found" });
     }
+
+    await Product.updateMany(
+      { activeOffer: id },
+      { $unset: { activeOffer: "" } }
+    );
 
     res.status(200).json({
       message: "Offer deleted successfully",
@@ -185,11 +232,27 @@ const deleteOffer = asyncHandler(async (req, res) => {
   }
 });
 
+const getOffers = asyncHandler(async (req, res) => {
+  try {
+    const offers = await Offer.find()
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "items",
+        select: "name", // Select only the 'name' field for products or categories
+      });
+
+    res.status(200).json({ offers });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching offers", error: error.message });
+  }
+});
+
 module.exports = {
   addOffer,
   getOffers,
   editOffer,
   deleteOffer,
   resetOffer,
-  checkExpiredOffers,
 };

@@ -25,19 +25,20 @@ const OfferSchema = new mongoose.Schema({
     type: Date,
     required: true,
   },
-  items: [{
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    refPath: 'offerType'
-  }],
+  items: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+  ],
   isActive: {
     type: Boolean,
-    default: true
+    default: true,
   },
   createdAt: {
     type: Date,
     default: Date.now,
-  }
+  },
 });
 
 const Offer = mongoose.model("Offer", OfferSchema);
