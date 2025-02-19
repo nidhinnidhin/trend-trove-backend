@@ -29,14 +29,14 @@ const adminLogin = asyncHandler(async (req, res) => {
     }
 
     const token = Jwt.sign({ email, role: "admin" }, JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "30d",
     });
 
     res.cookie("adminToken", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
+      maxAge: 30 * 24 * 60 * 60 * 1000, 
     });
 
     res.status(200).json({ message: "Login successful" });

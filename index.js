@@ -25,6 +25,8 @@ const userWishlistRoutes = require("./routes/wishlist/wishlistRoutes")
 const adminCouponRoutes = require("./admin/routes/coupon/couponRoutes")
 const userCouponRoutes = require("./routes/coupon/couponRoutes")
 const adminOfferRoutes = require('./admin/routes/offer/offerRoutes')
+const payementRoutes = require("./routes/payment/paymentRoutes")
+const walletRoutes = require("./routes/wallet/walletRoutes")
 const otpRoutes = require("./routes/otp/signupOtpRoutes");
 const bodyParser = require("body-parser");
 const passport = require("passport");
@@ -75,7 +77,8 @@ app.use("/api/user/wishlist/", userWishlistRoutes);
 app.use("/api/admin/coupon/", adminCouponRoutes)
 app.use("/api/coupon/", userCouponRoutes)
 app.use("/api/admin/offer/", adminOfferRoutes)
-
+app.use("/api/payment/", payementRoutes)
+app.use('/api/wallet/', walletRoutes);
 
 connectDb();
     
