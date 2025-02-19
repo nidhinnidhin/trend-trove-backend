@@ -1,5 +1,6 @@
 const Checkout = require("../../../models/checkout/checkoutModal");
 const Cart = require("../../../models/cart/cartModal");
+const Wallet = require("../../../models/wallet/walletModel");
 const Address = require("../../../models/address/addressModal");
 const Size = require("../../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
