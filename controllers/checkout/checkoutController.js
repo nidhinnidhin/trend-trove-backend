@@ -149,6 +149,95 @@ const createCheckout = asyncHandler(async (req, res) => {
   }
 });
 
+
+const returnProduct = asyncHandler(async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const { reason, details } = req.body;
+
+    // Validate input
+    if (!reason || !details?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Return reason and additional details are required"
+      });
+    }
+
+    // Find the order with populated items
+    const order = await Checkout.findOne({
+      _id: orderId,
+      user: req.user.id
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
+
+    // Find the specific item in the order
+    const itemIndex = order.items.findIndex(
+      (item) => item._id.toString() === itemId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found in order"
+      });
+    }
+
+    const item = order.items[itemIndex];
+
+    // Check if item is eligible for return
+    if (item.status !== "Delivered") {
+      return res.status(400).json({
+        success: false,
+        message: "Only delivered items can be returned"
+      });
+    }
+
+    if (item.returnRequested) {
+      return res.status(400).json({
+        success: false,
+        message: "Return already requested for this item"
+      });
+    }
+
+    // Update the item with return request
+    order.items[itemIndex].returnRequested = true;
+    order.items[itemIndex].returnReason = reason;
+    order.items[itemIndex].additionalDetails = details;
+    order.items[itemIndex].returnStatus = "Return Pending";
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Return request submitted successfully",
+      order: {
+        orderId: order._id,
+        items: order.items.map(item => ({
+          itemId: item._id,
+          status: item.status,
+          returnRequested: item.returnRequested,
+          returnStatus: item.returnStatus,
+          returnReason: item.returnReason,
+          additionalDetails: item.additionalDetails
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("Return product error:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while processing the return request",
+      error: error.message
+    });
+  }
+});
+
 const getOrders = asyncHandler(async (req, res) => {
   try {
     const orders = await Checkout.find({ user: req.user.id })
@@ -284,8 +373,10 @@ const cancelOrder = asyncHandler(async (req, res) => {
     session.endSession();
   }
 });
+
 module.exports = {
   createCheckout,
   getOrders,
   cancelOrder,
+  returnProduct
 };

@@ -28,6 +28,7 @@ const OfferSchema = new mongoose.Schema({
   items: [
     {
       type: mongoose.Schema.Types.ObjectId,
+      ref: "Product", // Ensure this matches the model name of the referenced collection
       required: true,
     },
   ],

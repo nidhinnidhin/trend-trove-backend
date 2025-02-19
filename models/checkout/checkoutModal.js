@@ -47,10 +47,32 @@ const checkoutSchema = new mongoose.Schema(
         status: {
           type: String,
           default: "pending",
-          enum: ["pending", "Processing", "Delivered", "Cancelled"],
+          enum: ["pending", "Processing","Shiped", "Delivered", "Cancelled", "Returned"],
         },
         cancellationReason: {
           type: String,
+        },
+        returnRequested: {
+          type: Boolean,
+          default: false, 
+        },
+        returnReason: {
+          type: String,
+          enum: [
+            "Defective",
+            "Not as described",
+            "Wrong size/fit",
+            "Changed my mind",
+            "Other"
+          ],
+        },
+        additionalDetails: {
+          type: String,
+        },
+        returnStatus: {
+          type: String,
+          default: "Return Pending", 
+          enum: ["Return Pending", "Return Approved", "Return Rejected"],
         },
       },
     ],
@@ -97,7 +119,7 @@ const checkoutSchema = new mongoose.Schema(
       type: String,
       required: true,
       default: "pending",
-      enum: ["pending", "Processing", "Delivered", "Cancelled"],
+      enum: ["pending", "Processing","Shiped", "Delivered", "Cancelled"],
     },
     reason: {
       type: String,

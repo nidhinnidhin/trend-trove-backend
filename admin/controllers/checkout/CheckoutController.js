@@ -33,7 +33,7 @@ const getAllOrders = asyncHandler(async (req, res) => {
     const orders = await Checkout.find()
       .populate(orderPopulateConfig)
       .sort({ createdAt: -1 });
-
+    console.log(orders)
     const formattedOrders = orders.map((order) => ({
       orderId: order._id,
       customer: {
@@ -48,7 +48,11 @@ const getAllOrders = asyncHandler(async (req, res) => {
         quantity: item.quantity,
         price: item.price,
         image: item.variant?.mainImage,
-        status: item.status
+        status: item.status,
+        returnRequested: item.returnRequested || false,
+        returnStatus: item.returnStatus,
+        returnReason: item.returnReason,
+        additionalDetails: item.additionalDetails
       })),
       shippingAddress: order.shipping.address,
       shippingMethod: order.shipping.shippingMethod,
@@ -111,7 +115,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     const { newStatus } = req.body;
 
     // Validate status
-    const validStatuses = ["pending", "Processing", "Delivered", "Cancelled"];
+    const validStatuses = ["pending", "Processing","Shiped", "Delivered", "Cancelled"];
     if (!validStatuses.includes(newStatus)) {
       return res.status(400).json({
         success: false,
@@ -178,8 +182,124 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 });
 
+// const approveReturn = asyncHandler(async (req, res) => {
+//   const { orderId, itemId } = req.params;
+//   const { approved } = req.body;
+
+//   try {
+//     const order = await Checkout.findOne({
+//       _id: orderId,
+//       "items._id": itemId,
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({ success: false, message: "Order or item not found" });
+//     }
+
+//     const itemIndex = order.items.findIndex((item) => item._id.toString() === itemId);
+    
+//     if (itemIndex === -1) {
+//       return res.status(404).json({ success: false, message: "Item not found in this order" });
+//     }
+
+//     if (approved) {
+//       order.items[itemIndex].status = "Returned";
+//       order.items[itemIndex].returnStatus = "Return Approved";
+//     } else {
+//       order.items[itemIndex].returnStatus = "Return Rejected";
+//       order.items[itemIndex].returnRequested = false;
+//     }
+
+//     await order.save();
+
+//     res.status(200).json({ 
+//       success: true, 
+//       message: `Return ${approved ? 'approved' : 'rejected'} successfully`,
+//       order 
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: "An error occurred while processing the return request" 
+//     });
+//   }
+// });
+
+const approveReturn = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderId, itemId } = req.params;
+    const { approved } = req.body;
+
+    const order = await Checkout.findById(orderId).populate({
+      path: "items.sizeVariant",
+      select: "stockCount inStock",
+    });
+
+    if (!order) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    const itemIndex = order.items.findIndex((item) => item._id.toString() === itemId);
+
+    if (itemIndex === -1) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Item not found in this order" });
+    }
+
+    const item = order.items[itemIndex];
+
+    if (approved) {
+      // Update item return status
+      order.items[itemIndex].status = "Returned";
+      order.items[itemIndex].returnStatus = "Return Approved";
+
+      // Increase stock count for the returned item
+      if (item.sizeVariant) {
+        const sizeVariant = await Size.findById(item.sizeVariant._id);
+
+        if (sizeVariant) {
+          sizeVariant.stockCount += item.quantity;
+          if (sizeVariant.stockCount > 0) {
+            sizeVariant.inStock = true;
+          }
+          await sizeVariant.save({ session });
+        }
+      }
+    } else {
+      order.items[itemIndex].returnStatus = "Return Rejected";
+      order.items[itemIndex].returnRequested = false;
+    }
+
+    await order.save({ session });
+    await session.commitTransaction();
+
+    res.status(200).json({
+      success: true,
+      message: `Return ${approved ? "approved" : "rejected"} successfully`,
+      order,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while processing the return request",
+      error: error.message,
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
+
 module.exports = {
   getAllOrders,
   updateOrderStatus,
-  orderHistory
+  orderHistory,
+  approveReturn
 };

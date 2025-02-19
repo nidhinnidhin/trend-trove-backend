@@ -238,7 +238,6 @@ const getOffers = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .populate({
         path: "items",
-        select: "name", // Select only the 'name' field for products or categories
       });
 
     res.status(200).json({ offers });
