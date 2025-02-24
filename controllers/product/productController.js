@@ -87,7 +87,6 @@ const getAllProducts = asyncHandler(async (req, res) => {
       query.name = { $regex: search, $options: "i" };
     }
 
-    // First, get the products without populating activeOffer to avoid issues
     const products = await Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -105,18 +104,14 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
     const totalProducts = await Product.countDocuments(query);
 
-    // Safely process products to include offer information
     const productsWithOffers = products.map(product => {
       const productObj = product.toObject();
       
-      // Check if there's an active offer reference but don't try to access it yet
       if (productObj.activeOffer) {
-        // Safely populate with basic information
         return {
           ...productObj,
           activeOffer: {
             _id: productObj.activeOffer,
-            // Don't include other fields until we properly populate
           }
         };
       }

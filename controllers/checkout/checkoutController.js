@@ -42,7 +42,7 @@ const createCheckout = asyncHandler(async (req, res) => {
       paymentStatus,
       finalTotal,
       couponCode,
-      discountAmount, 
+      discountAmount,
     } = req.body;
 
     if (
@@ -52,7 +52,7 @@ const createCheckout = asyncHandler(async (req, res) => {
       !paymentMethod ||
       !transactionId ||
       !paymentStatus ||
-      !finalTotal 
+      !finalTotal
     ) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -86,7 +86,7 @@ const createCheckout = asyncHandler(async (req, res) => {
         sizeVariant: item.sizeVariant._id,
         quantity: item.quantity,
         price: item.sizeVariant.price,
-        finalPrice: item.sizeVariant.discountPrice * item.quantity, 
+        finalPrice: item.sizeVariant.discountPrice * item.quantity,
         status: "pending",
       })),
       shipping: {
@@ -102,7 +102,7 @@ const createCheckout = asyncHandler(async (req, res) => {
         paymentDate: new Date(),
       },
       couponCode: couponCode || null,
-      discountAmount: discountAmount || 0, 
+      discountAmount: discountAmount || 0,
       totalAmount: finalTotal,
       orderStatus: "pending",
     });
@@ -149,7 +149,6 @@ const createCheckout = asyncHandler(async (req, res) => {
   }
 });
 
-
 const returnProduct = asyncHandler(async (req, res) => {
   try {
     const { orderId, itemId } = req.params;
@@ -159,20 +158,20 @@ const returnProduct = asyncHandler(async (req, res) => {
     if (!reason || !details?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Return reason and additional details are required"
+        message: "Return reason and additional details are required",
       });
     }
 
     // Find the order with populated items
     const order = await Checkout.findOne({
       _id: orderId,
-      user: req.user.id
+      user: req.user.id,
     });
 
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: "Order not found"
+        message: "Order not found",
       });
     }
 
@@ -184,7 +183,7 @@ const returnProduct = asyncHandler(async (req, res) => {
     if (itemIndex === -1) {
       return res.status(404).json({
         success: false,
-        message: "Item not found in order"
+        message: "Item not found in order",
       });
     }
 
@@ -194,14 +193,14 @@ const returnProduct = asyncHandler(async (req, res) => {
     if (item.status !== "Delivered") {
       return res.status(400).json({
         success: false,
-        message: "Only delivered items can be returned"
+        message: "Only delivered items can be returned",
       });
     }
 
     if (item.returnRequested) {
       return res.status(400).json({
         success: false,
-        message: "Return already requested for this item"
+        message: "Return already requested for this item",
       });
     }
 
@@ -218,22 +217,22 @@ const returnProduct = asyncHandler(async (req, res) => {
       message: "Return request submitted successfully",
       order: {
         orderId: order._id,
-        items: order.items.map(item => ({
+        items: order.items.map((item) => ({
           itemId: item._id,
           status: item.status,
           returnRequested: item.returnRequested,
           returnStatus: item.returnStatus,
           returnReason: item.returnReason,
-          additionalDetails: item.additionalDetails
-        }))
-      }
+          additionalDetails: item.additionalDetails,
+        })),
+      },
     });
   } catch (error) {
     console.error("Return product error:", error);
     res.status(500).json({
       success: false,
       message: "An error occurred while processing the return request",
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -265,11 +264,14 @@ const getOrders = asyncHandler(async (req, res) => {
       items: order.items.map((item) => ({
         itemId: item._id,
         status: item.status,
+        productId: item.product?._id, // Add productId
         productName: item.product?.name || "N/A",
-        price: item.price || 0, 
-        finalPrice: item.finalPrice || 0, 
+        price: item.price || 0,
+        finalPrice: item.finalPrice || 0,
         quantity: item.quantity,
+        variantId: item.variant?._id, // Add variantId
         color: item.variant?.color || "N/A",
+        sizeVariantId: item.sizeVariant?._id, // Add sizeVariantId
         size: item.sizeVariant?.size || "N/A",
         image: item.variant?.mainImage || "N/A",
       })),
@@ -277,7 +279,10 @@ const getOrders = asyncHandler(async (req, res) => {
       deliveryCharge: order.shipping.deliveryCharge,
       couponCode: order.couponCode,
       discountAmount: order.discountAmount || 0,
-      subTotal: order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+      subTotal: order.items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      ),
     }));
 
     res.status(200).json({
@@ -378,5 +383,5 @@ module.exports = {
   createCheckout,
   getOrders,
   cancelOrder,
-  returnProduct
+  returnProduct,
 };

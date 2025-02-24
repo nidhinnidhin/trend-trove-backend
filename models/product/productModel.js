@@ -16,7 +16,11 @@ const ProductSchema = new mongoose.Schema(
     },
     material: { type: String },
     pattern: { type: String },
-    ratings: { type: Number, default: 0 },
+    reviews: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Review",
+      required: true,
+    },
     gender: { type: String, required: true },
     variants: [{ type: mongoose.Schema.Types.ObjectId, ref: "Variant" }],
     activeOffer: {
@@ -25,6 +29,7 @@ const ProductSchema = new mongoose.Schema(
     },
     discountedPrice: { type: Number },
     isDeleted: { type: Boolean, default: false },
+    reviews: [{ type: mongoose.Schema.Types.ObjectId, ref: "Review" }],
   },
   { timestamps: true }
 );

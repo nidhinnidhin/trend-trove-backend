@@ -28,10 +28,12 @@ const adminOfferRoutes = require('./admin/routes/offer/offerRoutes')
 const payementRoutes = require("./routes/payment/paymentRoutes")
 const walletRoutes = require("./routes/wallet/walletRoutes")
 const otpRoutes = require("./routes/otp/signupOtpRoutes");
+const reviewRoutes = require("./routes/review/reviewRoute");
 const bodyParser = require("body-parser");
 const passport = require("passport");
 const cookieParser = require("cookie-parser");
 require("./config/passport");
+const Review = require("./models/review/reviewModel")
 
 require("dotenv").config();
 
@@ -51,10 +53,17 @@ app.use(
   })
 );
 
-cron.schedule('0 * * * *', async () => {
-  await updateOfferStatus();
-  console.log('Running offer status update...');
-});
+async function dropReviewIndex() {
+  try {
+    await Review.collection.dropIndex("user_1_product_1_variant_1_sizeVariant_1");
+    console.log("Successfully dropped the unique review index");
+  } catch (error) {
+    console.log("Index drop not needed or failed:", error.message);
+  }
+}
+
+dropReviewIndex();
+
 
 app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);
@@ -79,6 +88,7 @@ app.use("/api/coupon/", userCouponRoutes)
 app.use("/api/admin/offer/", adminOfferRoutes)
 app.use("/api/payment/", payementRoutes)
 app.use('/api/wallet/', walletRoutes);
+app.use("/api/user/review/", reviewRoutes);
 
 connectDb();
     
