@@ -45,6 +45,14 @@ const AddressSchema = new mongoose.Schema({
       type: String, 
       enum: ['Home', 'Work'], 
       required: true 
+    },
+    isUsedInOrder: {
+      type: Boolean,
+      default: false
+    },
+    isActive: {
+      type: Boolean,
+      default: true
     }
   }, { timestamps: true });
   

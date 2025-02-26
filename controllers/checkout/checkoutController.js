@@ -125,6 +125,15 @@ const createCheckout = asyncHandler(async (req, res) => {
     cart.isActive = false;
     await cart.save({ session });
 
+    // Mark the address as used in order
+    await Address.findByIdAndUpdate(
+      addressId,
+      { 
+        isUsedInOrder: true,
+      },
+      { session }
+    );
+
     await session.commitTransaction();
 
     const completedOrder = await Checkout.findById(newCheckout._id).populate(

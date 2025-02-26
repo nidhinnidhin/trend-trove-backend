@@ -5,6 +5,7 @@ const Address = require("../../../models/address/addressModal");
 const Size = require("../../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 const { default: mongoose } = require("mongoose");
+const nodemailer = require("nodemailer");
 
 const orderPopulateConfig = [
   {
@@ -25,7 +26,8 @@ const orderPopulateConfig = [
   },
   {
     path: 'shipping.address',
-    select: 'fullName address city state pincode mobileNumber addressType'
+    select: 'fullName address city state pincode mobileNumber addressType',
+    match: { $or: [{ isActive: true }, { isUsedInOrder: true }] }
   }
 ];
 
@@ -227,18 +229,31 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 //   }
 // });
 
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 const approveReturn = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { orderId, itemId } = req.params;
-    const { approved } = req.body;
+    const { approved, rejectionReason } = req.body;
 
-    const order = await Checkout.findById(orderId).populate({
-      path: "items.sizeVariant",
-      select: "stockCount inStock",
-    });
+    const order = await Checkout.findById(orderId)
+      .populate({
+        path: "items.sizeVariant",
+        select: "stockCount inStock",
+      })
+      .populate({
+        path: "user",
+        select: "email name"
+      });
 
     if (!order) {
       await session.abortTransaction();
@@ -274,6 +289,25 @@ const approveReturn = asyncHandler(async (req, res) => {
     } else {
       order.items[itemIndex].returnStatus = "Return Rejected";
       order.items[itemIndex].returnRequested = false;
+      order.items[itemIndex].rejectionReason = rejectionReason;
+
+      // Send rejection email
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: order.user.email,
+        subject: "Return Request Rejected",
+        html: `
+          <h2>Return Request Rejected</h2>
+          <p>Dear ${order.user.name},</p>
+          <p>Your return request for Order #${order._id} has been rejected.</p>
+          <p><strong>Reason for rejection:</strong></p>
+          <p>${rejectionReason}</p>
+          <p>If you have any questions, please contact our customer support.</p>
+          <p>Thank you for shopping with us!</p>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
     }
 
     await order.save({ session });

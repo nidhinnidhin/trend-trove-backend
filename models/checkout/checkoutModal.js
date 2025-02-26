@@ -74,6 +74,9 @@ const checkoutSchema = new mongoose.Schema(
           default: "Return Pending", 
           enum: ["Return Pending", "Return Approved", "Return Rejected"],
         },
+        rejectionReason: {
+          type: String,
+        },
       },
     ],
     shipping: {
