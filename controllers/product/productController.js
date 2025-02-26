@@ -391,6 +391,138 @@ const searchAndFetchRelatedProducts = asyncHandler(async (req, res) => {
   }
 });
 
+const getProductsByBrand = asyncHandler(async (req, res) => {
+  try {
+    const { brandId } = req.params;
+
+    // Check if brandId exists
+    if (!brandId) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        products: []
+      });
+    }
+
+    const products = await Product.find({ brand: brandId, isDeleted: false })
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      });
+
+    // Always return 200 status code, even if no products found
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products: products || [] // Ensure we always return an array
+    });
+
+  } catch (error) {
+    console.error("Error fetching brand products:", error);
+    // Return empty array even on error to prevent frontend crashes
+    return res.status(200).json({
+      success: true,
+      count: 0,
+      products: []
+    });
+  }
+});
+
+const getProductsByCategory = asyncHandler(async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { page = 1, limit = 8 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      category: categoryId,
+      isDeleted: false 
+    };
+
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      });
+
+    const totalProducts = await Product.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      products,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: parseInt(page),
+      totalProducts
+    });
+
+  } catch (error) {
+    console.error("Error fetching category products:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching category products",
+      error: error.message
+    });
+  }
+});
+
+const getProductsByGender = asyncHandler(async (req, res) => {
+  try {
+    const { gender } = req.params;
+    const { page = 1, limit = 8 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      gender: { $regex: new RegExp(gender, 'i') },
+      isDeleted: false 
+    };
+
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate("brand", "name")
+      .populate("category", "name")
+      .populate({
+        path: "variants",
+        populate: {
+          path: "sizes",
+          model: "SizeVariant",
+        },
+      });
+
+    const totalProducts = await Product.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      products,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: parseInt(page),
+      totalProducts
+    });
+
+  } catch (error) {
+    console.error("Error fetching gender products:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching gender products",
+      error: error.message
+    });
+  }
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -398,4 +530,7 @@ module.exports = {
   fetchRelatedProducts,
   searchProducts,
   searchAndFetchRelatedProducts,
+  getProductsByBrand,
+  getProductsByCategory,
+  getProductsByGender,
 };
