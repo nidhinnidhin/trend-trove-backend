@@ -34,8 +34,6 @@ const adminLogin = asyncHandler(async (req, res) => {
 
     res.cookie("adminToken", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
       maxAge: 30 * 24 * 60 * 60 * 1000, 
     });
 
@@ -45,6 +43,15 @@ const adminLogin = asyncHandler(async (req, res) => {
     console.log("Something went wrong..");
   }
 });
+
+const logoutAdmin = (req, res) => {
+  res.clearCookie('adminToken', {
+    httpOnly: true,
+    sameSite: 'Strict', 
+    secure: process.env.NODE_ENV === 'production',
+  });
+  res.status(200).json({ message: 'Logout successful' });
+};
 
 const blockUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
@@ -105,4 +112,4 @@ const userList = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { adminLogin, userList, blockUser, unblockUser };
+module.exports = { adminLogin, userList, blockUser, unblockUser, logoutAdmin };

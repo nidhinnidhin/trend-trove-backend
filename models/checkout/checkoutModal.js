@@ -100,10 +100,13 @@ const checkoutSchema = new mongoose.Schema(
       method: {
         type: String,
         required: true,
+        enum: ["cod", "online"]
       },
       status: {
         type: String,
         required: true,
+        enum: ["pending", "completed", "failed", "cancelled", "retry_pending"],
+        default: "pending"
       },
       transactionId: {
         type: String,

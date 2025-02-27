@@ -108,32 +108,6 @@ const createCheckout = asyncHandler(async (req, res) => {
     });
 
     await newCheckout.save({ session });
-
-    for (const item of cart.items) {
-      const sizeVariant = await Size.findById(item.sizeVariant._id);
-      if (sizeVariant) {
-        sizeVariant.stockCount -= item.quantity;
-        if (sizeVariant.stockCount <= 0) {
-          sizeVariant.inStock = false;
-        }
-        await sizeVariant.save({ session });
-      }
-    }
-
-    cart.items = [];
-    cart.totalPrice = 0;
-    cart.isActive = false;
-    await cart.save({ session });
-
-    // Mark the address as used in order
-    await Address.findByIdAndUpdate(
-      addressId,
-      { 
-        isUsedInOrder: true,
-      },
-      { session }
-    );
-
     await session.commitTransaction();
 
     const completedOrder = await Checkout.findById(newCheckout._id).populate(
@@ -142,15 +116,15 @@ const createCheckout = asyncHandler(async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Checkout completed successfully",
+      message: "Checkout created successfully",
       order: completedOrder,
+      checkoutId: newCheckout._id
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error(error);
     res.status(500).json({
       success: false,
-      message: "Error completing checkout",
+      message: "Error creating checkout",
       error: error.message,
     });
   } finally {

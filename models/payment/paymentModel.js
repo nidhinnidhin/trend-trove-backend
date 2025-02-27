@@ -26,12 +26,17 @@ const paymentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['created', 'completed', 'failed'],
+    enum: ['created', 'completed', 'failed', 'cancelled', 'retry_pending'],
     default: 'created'
   },
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  checkoutId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Checkout',
+    required: true
   }
 });
 

@@ -34,6 +34,7 @@ const passport = require("passport");
 const cookieParser = require("cookie-parser");
 require("./config/passport");
 const Review = require("./models/review/reviewModel")
+const bannerRoutes = require("./routes/banners/bannerRoutes");
 
 require("dotenv").config();
 
@@ -89,6 +90,7 @@ app.use("/api/admin/offer/", adminOfferRoutes)
 app.use("/api/payment/", payementRoutes)
 app.use('/api/wallet/', walletRoutes);
 app.use("/api/user/review/", reviewRoutes);
+app.use("/api/banners/", bannerRoutes);
 
 connectDb();
     
