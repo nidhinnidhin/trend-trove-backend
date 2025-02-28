@@ -35,6 +35,7 @@ const reviewRoutes = require("./routes/review/reviewRoute");
 const bodyParser = require("body-parser");
 const passport = require("passport");
 const cookieParser = require("cookie-parser");
+const session = require('express-session');
 require("./config/passport");
 const Review = require("./models/review/reviewModel")
 const bannerRoutes = require("./routes/banners/bannerRoutes");
@@ -45,6 +46,21 @@ require("dotenv").config();
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Configure session before passport
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize passport after session
+app.use(passport.initialize());
+app.use(passport.session());
 
 // 1. Configure CORS
 app.use(cors({
@@ -127,7 +143,6 @@ const csrfMiddleware = (req, res, next) => {
 // 6. Apply CSRF middleware globally
 app.use(csrfMiddleware);
 
-app.use(passport.initialize());
 app.use(morgan('dev')); 
 app.use(helmet());
 

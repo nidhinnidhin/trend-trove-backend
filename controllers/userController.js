@@ -6,6 +6,8 @@ const cloudinary = require("../config/cloudinary");
 const Otp = require("../models/otp/signUpSendOtpModel");
 const nodemailer = require("nodemailer");
 const Wallet = require("../models/wallet/walletModel");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
 
 // const validateEmail = (email) => {
 //   const emailRegex = /^[A-Za-z0-9._%+-]{3,}@gmail\.com$/;
@@ -552,6 +554,70 @@ const resetUserPassword = asyncHandler(async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: 'An error occurred', error: err.message });
   }
+});
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "http://localhost:9090/api/users/auth/google/callback",
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ email: profile.emails[0].value });
+        
+        if (user) {
+          // Update Google ID if user exists but doesn't have one
+          if (!user.googleId) {
+            user.googleId = profile.id;
+            await user.save();
+          }
+        } else {
+          // Create new user
+          const username = `${profile.name.givenName}${Math.random().toString(36).slice(2, 8)}`.toLowerCase();
+          
+          user = await User.create({
+            googleId: profile.id,
+            firstname: profile.name.givenName,
+            lastname: profile.name.familyName,
+            username: username,
+            email: profile.emails[0].value,
+            image: profile.photos[0].value,
+            password: null // Google authenticated users don't need password
+          });
+
+          // Create wallet for new user
+          await Wallet.create({
+            userId: user._id,
+            balance: 0,
+            transactions: []
+          });
+        }
+
+        // Generate JWT token
+        const token = Jwt.sign(
+          { id: user._id, email: user.email },
+          process.env.JWT_SECRET || "1921u0030",
+          { expiresIn: "30d" }
+        );
+
+        return done(null, { token, user });
+      } catch (error) {
+        return done(error, null);
+      }
+    }
+  )
+);
+
+// Add these passport serialization methods
+passport.serializeUser((user, done) => {
+  done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+  done(null, user);
 });
 
 module.exports = {

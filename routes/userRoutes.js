@@ -32,25 +32,32 @@ router.put(
   updateUserProfile
 );
 
-router.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+router.get("/auth/google",
+  passport.authenticate("google", { 
+    scope: ["profile", "email"],
+    prompt: "select_account"
+  })
 );
 
 router.get(
   "/auth/google/callback",
-  passport.authenticate("google", { session: false }),
-  async (req, res) => {
-    const { token, user } = req.user;
+  passport.authenticate("google", { 
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=Google authentication failed`,
+    session: false 
+  }),
+  (req, res) => {
+    try {
+      const { token, user } = req.user;
 
-    const existingUser = await User.findById(user.id);
-    if (!existingUser || existingUser.isDeleted) {
-      return res.status(400).json({
-        message: "You are temporarily blocked. Please contact admin.",
-      });
+      if (!user || user.isDeleted) {
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=Account blocked`);
+      }
+
+      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+    } catch (error) {
+      console.error('Google callback error:', error);
+      res.redirect(`${process.env.FRONTEND_URL}/login?error=Authentication failed`);
     }
-
-    res.redirect(`http://localhost:3000?token=${token}`);
   }
 );
 
