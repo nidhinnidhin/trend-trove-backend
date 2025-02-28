@@ -9,5 +9,6 @@ router.get("/userlist",adminAuthMiddleware, userList)
 router.put("/block/:userId",adminAuthMiddleware, blockUser);
 router.put("/unblock/:userId",adminAuthMiddleware, unblockUser);
 router.get('/admin/logout', logoutAdmin);
+router.post("/logout", logoutAdmin);
 
 module.exports = router;

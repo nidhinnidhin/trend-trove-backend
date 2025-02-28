@@ -3,6 +3,9 @@ const connectDb = require("./db/connection");
 const app = express();
 const cors = require("cors");
 const { updateOfferStatus } = require('./admin/helper/offerHelpers')
+const morgan = require('morgan');
+const helmet = require('helmet');
+const csrf = require('csurf');
 const cron = require('node-cron');
 const userRoutes = require("./routes/userRoutes");
 // const adminRoutes = require("./routes/adminRoutes");
@@ -38,21 +41,99 @@ const bannerRoutes = require("./routes/banners/bannerRoutes");
 
 require("dotenv").config();
 
-
-app.use(passport.initialize());
-app.use(bodyParser.json());
+// Move these configurations to the top of your file, before any routes
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// 1. Configure CORS
+app.use(cors({
+  origin: "http://localhost:3000",
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-csrf-token',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['x-csrf-token']
+}));
+
+// 2. Configure CSRF protection
+const csrfProtection = csrf({
+  cookie: {
+    key: '_csrf',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/'
+  }
+});
+
+// 3. Global error handler
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Invalid CSRF token',
+    });
+  }
+  
+  // Handle other errors
+  console.error(err.stack);
+  res.status(500).json({
+    status: 'error',
+    message: 'Internal server error'
+  });
+});
+
+// 4. CSRF Token endpoint
+app.get('/api/csrf-token', (req, res) => {
+  // Generate CSRF token without protection
+  const token = csrf({
+    cookie: {
+      key: '_csrf',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/'
+    }
+  })(req, res, () => {
+    res.json({ csrfToken: req.csrfToken() });
+  });
+});
+
+// 5. CSRF Protection Middleware
+const csrfMiddleware = (req, res, next) => {
+  // Exclude certain paths from CSRF protection
+  const excludedPaths = [
+    '/api/csrf-token',
+    '/api/users/logout',
+    '/api/admin/adminlogin',
+    '/api/admin/logout'
+  ];
+
+  if (excludedPaths.includes(req.path) || req.method === 'GET') {
+    return next();
+  }
+
+  // Apply CSRF protection
+  csrfProtection(req, res, next);
+};
+
+// 6. Apply CSRF middleware globally
+app.use(csrfMiddleware);
+
+app.use(passport.initialize());
+app.use(morgan('dev')); 
+app.use(helmet());
+
+app.post('/api/protected-route', (req, res) => {
+  res.send('CSRF token is valid!');
+});
 
 async function dropReviewIndex() {
   try {

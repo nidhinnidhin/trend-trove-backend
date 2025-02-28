@@ -2,26 +2,44 @@ const Wallet = require('../../models/wallet/walletModel');
 
 const getWalletDetails = async (req, res) => {
   try {
-    let wallet = await Wallet.findOne({ userId: req.user._id });
+    // Check if req.user exists and has id property
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated or user ID missing'
+      });
+    }
+
+    let wallet = await Wallet.findOne({ userId: req.user.id });
     
     if (!wallet) {
+      // Make sure we're passing a valid userId when creating a new wallet
       wallet = await Wallet.create({
-        userId: req.user._id,
+        userId: req.user.id,
         balance: 0,
         transactions: []
       });
     }
 
+    // Sort transactions by date in descending order
+    const sortedTransactions = wallet.transactions.sort((a, b) => 
+      new Date(b.date) - new Date(a.date)
+    );
+
     res.status(200).json({
       success: true,
       balance: wallet.balance,
-      transactions: wallet.transactions.sort((a, b) => b.date - a.date)
+      transactions: sortedTransactions,
+      referralEarnings: sortedTransactions
+        .filter(t => t.description.toLowerCase().includes('referral'))
+        .reduce((sum, t) => sum + t.amount, 0)
     });
   } catch (error) {
     console.error('Error in getWalletDetails:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching wallet details'
+      message: 'Error fetching wallet details',
+      error: error.message
     });
   }
 };

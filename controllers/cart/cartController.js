@@ -100,15 +100,14 @@ const getCart = async (req, res) => {
         select: "size price discountPrice stockCount",
       });
 
-    if (!cart || cart.items.length === 0) {
-      return res.status(404).json({ message: "Cart not found or empty" });
+    if (!cart || cart.length === 0) {
+      return res.status(200).json({ message: "Cart is empty", cart: [] });
     }
 
     cart.items = cart.items.sort(
       (a, b) => new Date(b._id.getTimestamp()) - new Date(a._id.getTimestamp())
     );
-    
-    
+
     return res
       .status(200)
       .json({ message: "Cart retrieved successfully", cart });
@@ -121,7 +120,7 @@ const getCart = async (req, res) => {
 };
 
 const deleteProductFromCart = asyncHandler(async (req, res) => {
-  const { productId, variantId, sizeVariantId } = req.body; 
+  const { productId, variantId, sizeVariantId } = req.body;
 
   if (!productId || !variantId || !sizeVariantId) {
     return res.status(400).json({
@@ -226,7 +225,7 @@ const updateProductQuantity = asyncHandler(async (req, res) => {
 });
 
 const clearCart = asyncHandler(async (req, res) => {
-  const userId = req.user.id; 
+  const userId = req.user.id;
 
   try {
     const cart = await Cart.findOne({ user: userId });

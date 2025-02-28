@@ -74,7 +74,7 @@ const getWishlist = asyncHandler(async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const wishlist = await Wishlist.findOne({ user: userId }) 
+    const wishlist = await Wishlist.findOne({ user: userId })
       .populate({
         path: "items.product",
         select:
@@ -92,12 +92,15 @@ const getWishlist = asyncHandler(async (req, res) => {
       });
 
     if (!wishlist || wishlist.items.length === 0) {
-      return res.status(404).json({ message: "Wishlist is empty" });
+      return res.status(200).json({
+        message: "Wishlist is empty",
+        Wishlist: [],
+      });
     }
 
     res.status(200).json({
       message: "Wishlist retrieved successfully",
-      Wishlist: wishlist.items, 
+      Wishlist: wishlist.items,
     });
   } catch (error) {
     console.error("Error fetching Wishlist:", error);
@@ -136,13 +139,10 @@ const deleteProductFromWhishlist = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found in wishlist" });
     }
 
-    // Remove the item from the wishlist
     wishlist.items.splice(itemIndex, 1);
 
-    // Update totalItems to the length of the items array
     wishlist.totalItems = wishlist.items.length;
 
-    // Save the updated wishlist
     await wishlist.save();
 
     res.status(200).json({

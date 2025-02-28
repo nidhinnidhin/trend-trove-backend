@@ -41,5 +41,18 @@ const walletSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Add a pre-save hook to log transactions
+walletSchema.pre('save', function(next) {
+  if (this.isModified('transactions')) {
+    const newTransactions = this.transactions.slice(-1)[0];
+    console.log('New wallet transaction:', {
+      userId: this.userId,
+      transaction: newTransactions,
+      newBalance: this.balance
+    });
+  }
+  next();
+});
+
 const Wallet = mongoose.model('Wallet', walletSchema);
 module.exports = Wallet;

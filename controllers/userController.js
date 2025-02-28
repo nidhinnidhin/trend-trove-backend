@@ -5,6 +5,7 @@ const Jwt = require("jsonwebtoken");
 const cloudinary = require("../config/cloudinary");
 const Otp = require("../models/otp/signUpSendOtpModel");
 const nodemailer = require("nodemailer");
+const Wallet = require("../models/wallet/walletModel");
 
 // const validateEmail = (email) => {
 //   const emailRegex = /^[A-Za-z0-9._%+-]{3,}@gmail\.com$/;
@@ -20,64 +21,71 @@ const transporter = nodemailer.createTransport({
 });
 
 const registerUser = asyncHandler(async (req, res) => {
-  console.log("Body: ", req.body);
-  console.log("File: ", req.file);
-
-  const { firstname, lastname, username, email, password, confirmpassword } =
-    req.body;
-
-  if (!req.file) {
-    return res.status(400).json({ message: "Profile image is required" });
-  }
-  const allowedFileTypes = ["image/jpeg", "image/png"];
-  if (!allowedFileTypes.includes(req.file.mimetype)) {
-    return res.status(400).json({
-      message: "Invalid file type. Only JPEG or PNG images are allowed.",
-    });
-  }
-
-  const textRegex = /^[A-Za-z]+$/;
-
-  if (!textRegex.test(username)) {
-    return res.status(400).json({
-      message:
-        "Username should only contain letters and no spaces or special characters.",
-    });
-  }
-
-  if (!textRegex.test(firstname)) {
-    return res.status(400).json({
-      message:
-        "Firstname should only contain letters and no spaces or special characters.",
-    });
-  }
-
-  if (!textRegex.test(lastname)) {
-    return res.status(400).json({
-      message:
-        "Lastname should only contain letters and no spaces or special characters.",
-    });
-  }
-
-  if (username.length <= 3) {
-    return res
-      .status(400)
-      .json({ message: "Username must be more than 3 characters long." });
-  }
-
-  // if (!validateEmail(email)) {
-  //   return res.status(400).json({ message: "Email must have at least 3 characters before @gmail.com" });
-  // }
-
-  const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
-  if (password.length < 8 || !specialCharRegex.test(password)) {
-    return res.status(400).json({
-      message:
-        "Password must be at least 8 characters long and contain at least one special character.",
-    });
-  }
-
   try {
+    const { firstname, lastname, username, email, password, confirmpassword, referralCode } = req.body;
+
+    console.log("Body: ", req.body);
+    console.log("File: ", req.file);
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Profile image is required" });
+    }
+    const allowedFileTypes = [
+      "image/jpeg", 
+      "image/png",   
+      "image/gif",   
+      "image/webp",  
+      "image/bmp",   
+      "image/svg+xml"
+    ];
+    
+    if (!allowedFileTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        message: "Invalid file type",
+      });
+    }
+
+    const textRegex = /^[A-Za-z]+$/;
+
+    if (!textRegex.test(username)) {
+      return res.status(400).json({
+        message:
+          "Username should only contain letters and no spaces or special characters.",
+      });
+    }
+
+    if (!textRegex.test(firstname)) {
+      return res.status(400).json({
+        message:
+          "Firstname should only contain letters and no spaces or special characters.",
+      });
+    }
+
+    if (!textRegex.test(lastname)) {
+      return res.status(400).json({
+        message:
+          "Lastname should only contain letters and no spaces or special characters.",
+      });
+    }
+
+    if (username.length <= 3) {
+      return res
+        .status(400)
+        .json({ message: "Username must be more than 3 characters long." });
+    }
+
+    // if (!validateEmail(email)) {
+    //   return res.status(400).json({ message: "Email must have at least 3 characters before @gmail.com" });
+    // }
+
+    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
+    if (password.length < 8 || !specialCharRegex.test(password)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters long and contain at least one special character.",
+      });
+    }
+
     const existUser = await User.findOne({
       $or: [{ email }, { username }],
     });
@@ -94,25 +102,92 @@ const registerUser = asyncHandler(async (req, res) => {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
-    const cloudinaryResponse = await cloudinary.uploader.upload(req.file.path, {
-      folder: "uploads",
-      use_filename: true,
-      unique_filename: false,
-    });
-    const image = cloudinaryResponse.secure_url;
+    // Check referral code
+    let referringUser = null;
+    if (referralCode) {
+      referringUser = await User.findOne({ referralCode: referralCode.trim() });
+      if (!referringUser) {
+        return res.status(400).json({ message: "Invalid referral code" });
+      }
+    }
 
+    // Upload image to cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path);
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Create new user
     const user = new User({
       firstname,
       lastname,
       username,
       email,
       password: hashedPassword,
-      image,
+      image: result.secure_url,
+      referredBy: referringUser ? referringUser._id : null
     });
 
     await user.save();
+
+    // Handle referral bonuses
+    if (referringUser) {
+      try {
+        // Create wallet for new user with referral bonus
+        await Wallet.create({
+          userId: user._id,
+          balance: 250,
+          transactions: [{
+            userId: user._id,
+            type: 'credit',
+            amount: 250,
+            description: `Referral bonus for using ${referringUser.username}'s code`,
+            date: new Date()
+          }]
+        });
+
+        // Update referring user's wallet
+        const referringUserWallet = await Wallet.findOne({ userId: referringUser._id });
+
+        if (referringUserWallet) {
+          // Update existing wallet
+          referringUserWallet.balance += 500;
+          referringUserWallet.transactions.push({
+            userId: referringUser._id,
+            type: 'credit',
+            amount: 500,
+            description: `Referral bonus for ${username}'s registration`,
+            date: new Date()
+          });
+          await referringUserWallet.save();
+        } else {
+          // Create new wallet for referring user
+          await Wallet.create({
+            userId: referringUser._id,
+            balance: 500,
+            transactions: [{
+              userId: referringUser._id,
+              type: 'credit',
+              amount: 500,
+              description: `Referral bonus for ${username}'s registration`,
+              date: new Date()
+            }]
+          });
+        }
+
+        console.log('Referral bonuses credited successfully');
+      } catch (walletError) {
+        console.error('Error handling referral bonuses:', walletError);
+        // Continue with registration even if wallet creation fails
+      }
+    } else {
+      // Create wallet for new user without referral bonus
+      await Wallet.create({
+        userId: user._id,
+        balance: 0,
+        transactions: []
+      });
+    }
 
     const token = Jwt.sign(
       { id: user._id, username, email },
@@ -120,9 +195,20 @@ const registerUser = asyncHandler(async (req, res) => {
       { expiresIn: "30d" }
     );
 
-    res.status(201).json({ message: "User registered successfully", token });
+    res.status(201).json({
+      message: referringUser 
+        ? "Registration successful! Referral bonus credited to your wallet!" 
+        : "Registration successful!",
+      token,
+      referralBonus: referringUser ? true : false
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "An error occurred", error: err.message });
+    console.error("Registration error:", err);
+    res.status(500).json({ 
+      message: "Registration failed", 
+      error: err.message 
+    });
   }
 });
 
@@ -173,14 +259,27 @@ const getUserProfile = asyncHandler(async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const user = await User.findById(userId).select("-password");
+    const user = await User.findById(userId)
+      .select("-password")
+      .populate({
+        path: 'referredBy',
+        select: 'username'
+      });
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Get wallet details
+    const wallet = await Wallet.findOne({ userId });
+    const referralTransactions = wallet?.transactions.filter(t => t.description.includes('referral'));
+
     res.status(200).json({
       message: "User profile fetched successfully",
-      user,
+      user: {
+        ...user.toObject(),
+        referralEarnings: referralTransactions?.reduce((sum, t) => sum + t.amount, 0) || 0
+      }
     });
   } catch (err) {
     res.status(500).json({ message: "An error occurred", error: err.message });
