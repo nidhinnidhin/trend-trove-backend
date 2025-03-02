@@ -22,10 +22,11 @@ const addAddress = asyncHandler(async (req, res) => {
       landmark,
       alternatePhone,
       addressType,
+      coordinates
     } = req.body;
 
     const newAddress = new Address({
-      user: req.user.id, // Ensure this is correctly set
+      user: req.user.id,
       fullName,
       mobileNumber,
       pincode,
@@ -36,6 +37,7 @@ const addAddress = asyncHandler(async (req, res) => {
       landmark,
       alternatePhone,
       addressType,
+      coordinates
     });
 
     const savedAddress = await newAddress.save();

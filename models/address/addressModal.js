@@ -53,6 +53,13 @@ const AddressSchema = new mongoose.Schema({
     isActive: {
       type: Boolean,
       default: true
+    },
+    coordinates: {
+      type: {
+        latitude: Number,
+        longitude: Number
+      },
+      required: false
     }
   }, { timestamps: true });
   
