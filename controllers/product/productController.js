@@ -73,16 +73,12 @@ const getAllProducts = asyncHandler(async (req, res) => {
       page = 1,
       limit = 5,
       search = "",
-      includeDeleted = false,
     } = req.query;
     const skip = (page - 1) * limit;
 
     const query = {};
 
-    if (!includeDeleted) {
-      query.isDeleted = false;
-    }
-
+    // Remove isDeleted filter to show all products
     if (search) {
       query.name = { $regex: search, $options: "i" };
     }
@@ -100,30 +96,23 @@ const getAllProducts = asyncHandler(async (req, res) => {
           model: "SizeVariant",
         },
       })
-      .populate("activeOffer")
+      .populate("activeOffer");
 
     const totalProducts = await Product.countDocuments(query);
 
-    const productsWithOffers = products.map(product => {
+    const productsWithStatus = products.map(product => {
       const productObj = product.toObject();
-      
-      if (productObj.activeOffer) {
-        return {
-          ...productObj,
-          activeOffer: {
-            _id: productObj.activeOffer,
-          }
-        };
-      }
-      
       return {
         ...productObj,
-        activeOffer: null
+        availability: productObj.isDeleted ? "Coming Soon" : "Available",
+        activeOffer: productObj.activeOffer ? {
+          _id: productObj.activeOffer,
+        } : null
       };
     });
 
     res.status(200).json({
-      products: productsWithOffers,
+      products: productsWithStatus,
       totalPages: Math.ceil(totalProducts / limit),
       currentPage: parseInt(page),
     });

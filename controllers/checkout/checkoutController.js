@@ -58,7 +58,10 @@ const createCheckout = asyncHandler(async (req, res) => {
     }
 
     const cart = await Cart.findById(cartId).populate([
-      { path: "items.product", select: "name price" },
+      { 
+        path: "items.product", 
+        select: "name price isDeleted"
+      },
       { path: "items.variant", select: "color mainImage" },
       {
         path: "items.sizeVariant",
@@ -68,6 +71,17 @@ const createCheckout = asyncHandler(async (req, res) => {
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Check for blocked/deleted products
+    const blockedProducts = cart.items.filter(item => item.product.isDeleted);
+    if (blockedProducts.length > 0) {
+      const blockedProductNames = blockedProducts.map(item => item.product.name);
+      return res.status(400).json({ 
+        success: false,
+        message: "Some products in your cart are currently unavailable for purchase",
+        blockedProducts: blockedProductNames
+      });
     }
 
     const address = await Address.findById(addressId);
