@@ -34,7 +34,7 @@ router.put(
 
 router.get("/auth/google",
   passport.authenticate("google", { 
-    rscope: ["pofile", "email"],
+    scope: ["profile", "email"],
     prompt: "select_account"
   })
 );
