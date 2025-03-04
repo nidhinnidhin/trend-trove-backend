@@ -22,7 +22,6 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Generate referral code before saving
 userSchema.pre('save', async function(next) {
   if (!this.referralCode) {
     const generateCode = () => {

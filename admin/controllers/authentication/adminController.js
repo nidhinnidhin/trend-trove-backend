@@ -1,52 +1,94 @@
 const asyncHandler = require("express-async-handler");
 const Jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const Admin = require("../../../models/admin/adminModel");
 const User = require("../../../models/userModel");
 
+// Create initial admin account if none exists
+const createInitialAdmin = async () => {
+  try {
+    const adminExists = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!adminExists) {
+      const hashedPassword = await bcrypt.hash("admin@123", 10);
+      await Admin.create({
+        email: "admin@gmail.com",
+        password: hashedPassword,
+        role: "admin",
+        isActive: true
+      });
+      console.log("Initial admin account created successfully");
+    }
+  } catch (error) {
+    console.error("Error creating initial admin:", error);
+  }
+};
 
 const adminLogin = asyncHandler(async (req, res) => {
-  const EMAIL = "admin@gmail.com";
-  const PASSWORD = "admin@123";
-  const JWT_SECRET = process.env.JWT_SECRET || "1921u0030";
-
   try {
     const { email, password } = req.body;
 
+    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
-    if (password.length < 8 || !specialCharRegex.test(password)) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 8 characters long and contain at least one special character.",
-      });
+    // Find admin by email
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (email !== EMAIL || password !== PASSWORD) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    // Check if admin is active
+    if (!admin.isActive) {
+      return res.status(403).json({ message: "Account is deactivated" });
     }
 
-    const token = Jwt.sign({ email, role: "admin" }, JWT_SECRET, {
-      expiresIn: "30d",
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Generate JWT token
+    const token = Jwt.sign(
+      { 
+        id: admin._id,
+        email: admin.email, 
+        role: admin.role 
+      }, 
+      process.env.JWT_SECRET || "1921u0030",
+      { expiresIn: "30d" }
+    );
+
+    // Update last login
+    await Admin.findByIdAndUpdate(admin._id, {
+      lastLogin: new Date()
     });
 
+    // Set cookie
     res.cookie("adminToken", token, {
       httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000, 
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
     });
 
-    res.status(200).json({ message: "Login successful" });
+    res.status(200).json({ 
+      message: "Login successful",
+      admin: {
+        email: admin.email,
+        role: admin.role
+      }
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
-    console.log("Something went wrong..");
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
-const logoutAdmin = (req, res) => {
+const logoutAdmin = asyncHandler(async (req, res) => {
   try {
-    // Clear admin token cookie
     res.clearCookie('adminToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -54,7 +96,6 @@ const logoutAdmin = (req, res) => {
       path: '/'
     });
 
-    // Clear CSRF token cookie
     res.clearCookie('_csrf', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -67,7 +108,7 @@ const logoutAdmin = (req, res) => {
     console.error('Logout error:', error);
     res.status(500).json({ message: 'Error during logout' });
   }
-};
+});
 
 const blockUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
@@ -128,4 +169,11 @@ const userList = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { adminLogin, userList, blockUser, unblockUser, logoutAdmin };
+module.exports = { 
+  adminLogin, 
+  userList, 
+  blockUser, 
+  unblockUser, 
+  logoutAdmin,
+  createInitialAdmin  // Make sure this is exported
+};

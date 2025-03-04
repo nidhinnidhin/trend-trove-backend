@@ -39,6 +39,113 @@ const session = require('express-session');
 require("./config/passport");
 const Review = require("./models/review/reviewModel")
 const bannerRoutes = require("./routes/banners/bannerRoutes");
+const { createInitialAdmin } = require('./admin/controllers/authentication/adminController');
+const userChatRoutes = require('./routes/chat/chatRoutes');
+const adminChatRoutes = require('./admin/routes/chat/chatRoutes');
+const http = require('http');
+const { Server } = require('socket.io');
+const Chat = require('./models/chat/chatModel');
+const User = require('./models/userModel'); // Adjust path as needed
+const Admin = require('./models/admin/adminModel');
+const mongoose = require('mongoose');
+
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('New client connected:', socket.id);
+
+  // Handle user joining
+  socket.on('join', async (userId) => {
+    console.log(`User ${userId} joined the chat`);
+    socket.join(userId);
+  });
+
+  // Handle admin joining
+  socket.on('admin-join', () => {
+    console.log('Admin joined the chat');
+    socket.join('admin-room');
+  });
+
+  // Handle sending messages
+  socket.on('send-message', async (data) => {
+    try {
+      const { userId, message, senderType } = data;
+      
+      // Get admin ID from the database using the token
+      let senderId;
+      if (senderType === 'Admin') {
+        const admin = await Admin.findOne({ email: 'admin@gmail.com' });
+        senderId = admin._id;
+      } else {
+        senderId = userId;
+      }
+      
+      // Create message object with a unique _id
+      const messageObj = {
+        _id: new mongoose.Types.ObjectId(),
+        sender: senderId,
+        senderType,
+        message,
+        timestamp: new Date(),
+        read: false
+      };
+
+      // Find or create chat
+      let chat = await Chat.findOne({ user: userId });
+
+      if (!chat) {
+        chat = new Chat({
+          user: userId,
+          messages: [messageObj],
+          lastMessage: new Date()
+        });
+      } else {
+        // Check for duplicate message before adding
+        const isDuplicate = chat.messages.some(msg => 
+          msg.message === message && 
+          msg.senderType === senderType &&
+          Math.abs(new Date(msg.timestamp) - new Date()) < 1000 // Within 1 second
+        );
+
+        if (!isDuplicate) {
+          chat.messages.push(messageObj);
+          chat.lastMessage = new Date();
+        }
+      }
+
+      await chat.save();
+
+      // Emit to appropriate rooms
+      if (senderType === 'User') {
+        socket.emit('message-sent', { status: 'success', message: messageObj });
+        io.to('admin-room').emit('new-message', { 
+          chatId: chat._id,
+          message: messageObj 
+        });
+      } else {
+        io.to(userId).emit('new-message', { message: messageObj });
+        socket.emit('message-sent', { status: 'success', message: messageObj });
+      }
+
+    } catch (error) {
+      console.error('Error handling message:', error);
+      socket.emit('error', { message: 'Failed to process message' });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
 
 require("dotenv").config();
 
@@ -140,7 +247,7 @@ const csrfMiddleware = (req, res, next) => {
   csrfProtection(req, res, next);
 };
 
-// 6. Apply CSRF middleware globally
+
 app.use(csrfMiddleware);
 
 app.use(morgan('dev')); 
@@ -161,6 +268,9 @@ async function dropReviewIndex() {
 
 dropReviewIndex();
 
+// Add chat routes before the error handler
+app.use("/api/admin/chat/", adminChatRoutes);
+app.use("/api/chat/", userChatRoutes);
 
 app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);
@@ -188,11 +298,23 @@ app.use('/api/wallet/', walletRoutes);
 app.use("/api/user/review/", reviewRoutes);
 app.use("/api/banners/", bannerRoutes);
 
-connectDb();
+connectDb().then(async () => {
+  const PORT = process.env.PORT || 9090;
+  
+  try {
+    await createInitialAdmin(); 
+    console.log("Admin initialization completed");
+    
+    server.listen(PORT, () => {
+      console.log(`Server started on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Server initialization error:", error);
+  }
+});
     
 app.get("/", (req, res) => {
   res.send("Hello world");
 });
 
-const PORT = process.env.PORT || 9090;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+// app.listen(PORT, () => console.log(`Server started on port ${PORT}`));

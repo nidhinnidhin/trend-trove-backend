@@ -36,7 +36,6 @@ const getAllOrders = asyncHandler(async (req, res) => {
     const orders = await Checkout.find()
       .populate(orderPopulateConfig)
       .sort({ createdAt: -1 });
-    console.log(orders)
     const formattedOrders = orders.map((order) => ({
       orderId: order._id,
       customer: {
