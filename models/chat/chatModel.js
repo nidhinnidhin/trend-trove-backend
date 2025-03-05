@@ -22,6 +22,10 @@ const messageSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  delivered: {
+    type: Boolean,
+    default: false
   }
 });
 

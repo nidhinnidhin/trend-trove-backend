@@ -28,25 +28,50 @@ const getAdminChats = asyncHandler(async (req, res) => {
 const markMessagesAsRead = asyncHandler(async (req, res) => {
   try {
     const { chatId } = req.params;
-    const senderType = req.path.includes('admin') ? 'User' : 'Admin';
     
+    if (!chatId) {
+      return res.status(400).json({ message: 'Chat ID is required' });
+    }
+
     const updatedChat = await Chat.findByIdAndUpdate(
       chatId,
       { 
         '$set': { 
-          'messages.$[elem].read': true 
+          'messages.$[elem].read': true,
+          'messages.$[elem].delivered': true
         } 
       },
       {
-        arrayFilters: [{ 'elem.read': false, 'elem.senderType': senderType }],
-        new: true
+        arrayFilters: [{ 'elem.senderType': 'User', 'elem.read': false }],
+        new: true,
+        runValidators: true
       }
     ).populate('user', 'username image email');
+
+    if (!updatedChat) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
     
-    res.json({ message: 'Messages marked as read', chat: updatedChat });
+    // Emit socket event for read receipts
+    if (req.app.get('io')) {
+      req.app.get('io').to(chatId).emit('messages-read', {
+        chatId,
+        messages: updatedChat.messages
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      chat: updatedChat,
+      message: 'Messages marked as read successfully'
+    });
   } catch (error) {
     console.error('Error marking messages as read:', error);
-    res.status(500).json({ message: 'Error marking messages as read', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error marking messages as read',
+      error: error.message 
+    });
   }
 });
 

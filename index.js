@@ -142,6 +142,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle message read status
+  socket.on('mark-messages-read', async ({ chatId }) => {
+    try {
+      await Chat.updateMany(
+        { _id: chatId, 'messages.read': false },
+        { 
+          $set: { 
+            'messages.$[elem].read': true,
+            'messages.$[elem].delivered': true
+          }
+        },
+        { 
+          arrayFilters: [{ 'elem.senderType': 'User', 'elem.read': false }],
+          multi: true 
+        }
+      );
+
+      io.to(chatId).emit('messages-read', { chatId });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
