@@ -100,7 +100,7 @@ const checkoutSchema = new mongoose.Schema(
       method: {
         type: String,
         required: true,
-        enum: ["cod", "online"]
+        enum: ["cod", "online", "wallet"]
       },
       status: {
         type: String,

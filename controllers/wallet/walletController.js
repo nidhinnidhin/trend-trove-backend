@@ -2,7 +2,6 @@ const Wallet = require('../../models/wallet/walletModel');
 
 const getWalletDetails = async (req, res) => {
   try {
-    // Check if req.user exists and has id property
     if (!req.user || !req.user.id) {
       return res.status(401).json({
         success: false,
@@ -11,9 +10,8 @@ const getWalletDetails = async (req, res) => {
     }
 
     let wallet = await Wallet.findOne({ userId: req.user.id });
-    
+
     if (!wallet) {
-      // Make sure we're passing a valid userId when creating a new wallet
       wallet = await Wallet.create({
         userId: req.user.id,
         balance: 0,
@@ -21,18 +19,32 @@ const getWalletDetails = async (req, res) => {
       });
     }
 
-    // Sort transactions by date in descending order
-    const sortedTransactions = wallet.transactions.sort((a, b) => 
-      new Date(b.date) - new Date(a.date)
-    );
+    // Ensure transactions exist before sorting
+    const sortedTransactions = wallet.transactions?.length
+      ? wallet.transactions.sort((a, b) => new Date(b.date) - new Date(a.date))
+      : [];
+
+    // Calculate the correct balance (sum of credited transactions)
+    const totalBalance = sortedTransactions.reduce((sum, t) => {
+      return sum + (t.amount > 0 ? t.amount : 0);
+    }, 0);
+
+    // Calculate referral earnings
+    const referralEarnings = sortedTransactions
+      .filter(t => t.description.toLowerCase().includes('referral'))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Update balance in DB (if not already updated)
+    if (wallet.balance !== totalBalance) {
+      wallet.balance = totalBalance;
+      await wallet.save();
+    }
 
     res.status(200).json({
       success: true,
-      balance: wallet.balance,
+      balance: totalBalance,
       transactions: sortedTransactions,
-      referralEarnings: sortedTransactions
-        .filter(t => t.description.toLowerCase().includes('referral'))
-        .reduce((sum, t) => sum + t.amount, 0)
+      referralEarnings
     });
   } catch (error) {
     console.error('Error in getWalletDetails:', error);
@@ -44,23 +56,29 @@ const getWalletDetails = async (req, res) => {
   }
 };
 
+
 // Add transaction
 const addTransaction = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated or user ID missing'
+      });
+    }
     const { amount, type, description } = req.body;
     
-    let wallet = await Wallet.findOne({ userId: req.user._id });
+    let wallet = await Wallet.findOne({ userId: req.user.id });
     
-    // If wallet doesn't exist, create one
+    console.log("wallettttttt",wallet)
     if (!wallet) {
       wallet = await Wallet.create({
-        userId: req.user._id,
+        userId: req.user.id,
         balance: 0,
         transactions: []
       });
     }
 
-    // Update balance
     if (type === 'credit') {
       wallet.balance += amount;
     } else if (type === 'debit') {
@@ -73,9 +91,8 @@ const addTransaction = async (req, res) => {
       wallet.balance -= amount;
     }
 
-    // Add transaction
     wallet.transactions.push({
-      userId: req.user._id,
+      userId: req.user.id,
       type,
       amount,
       description,
