@@ -126,46 +126,46 @@ const deleteCoupon = asyncHandler(async (req, res) => {
 });
 
 
-const applyCoupon = asyncHandler(async (req, res) => {
-    try {
-      const { couponCode, userId, totalPrice } = req.body;
+// const applyCoupon = asyncHandler(async (req, res) => {
+//     try {
+//       const { couponCode, userId, totalPrice } = req.body;
   
-      const coupon = await Coupon.findOne({ couponCode });
+//       const coupon = await Coupon.findOne({ couponCode });
   
-      if (!coupon) {
-        return res.status(404).json({ message: "Coupon not found" });
-      }
+//       if (!coupon) {
+//         return res.status(404).json({ message: "Coupon not found" });
+//       }
   
-      if (coupon.isExpired || coupon.usedBy) {
-        return res.status(400).json({ message: "Coupon is already used or expired" });
-      }
+//       if (coupon.isExpired || coupon.usedBy) {
+//         return res.status(400).json({ message: "Coupon is already used or expired" });
+//       }
   
-      if (coupon.minOrderAmount > totalPrice) {
-        return res.status(400).json({ message: "Minimum order amount not met" });
-      }
+//       if (coupon.minOrderAmount > totalPrice) {
+//         return res.status(400).json({ message: "Minimum order amount not met" });
+//       }
   
-      if (coupon.endDate < new Date()) {
-        return res.status(400).json({ message: "Coupon has expired" });
-      }
+//       if (coupon.endDate < new Date()) {
+//         return res.status(400).json({ message: "Coupon has expired" });
+//       }
   
-      let discountAmount = 0;
-      if (coupon.discountType === 'percentage') {
-        discountAmount = (totalPrice * coupon.discountValue) / 100;
-      } else {
-        discountAmount = coupon.discountValue;
-      }
+//       let discountAmount = 0;
+//       if (coupon.discountType === 'percentage') {
+//         discountAmount = (totalPrice * coupon.discountValue) / 100;
+//       } else {
+//         discountAmount = coupon.discountValue;
+//       }
   
-      const finalTotal = totalPrice - discountAmount;
+//       const finalTotal = totalPrice - discountAmount;
   
-      res.status(200).json({
-        message: "Coupon applied successfully",
-        discountAmount,
-        finalTotal,
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Error applying coupon", error });
-    }
-  });
+//       res.status(200).json({
+//         message: "Coupon applied successfully",
+//         discountAmount,
+//         finalTotal,
+//       });
+//     } catch (error) {
+//       res.status(500).json({ message: "Error applying coupon", error });
+//     }
+//   });
 
 module.exports = {
   addCoupon,
@@ -173,5 +173,5 @@ module.exports = {
   updateCoupon,
   deleteCoupon,
   getCouponById,
-  applyCoupon
+  // applyCoupon
 };

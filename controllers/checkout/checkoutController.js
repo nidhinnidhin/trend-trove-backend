@@ -4,6 +4,7 @@ const Address = require("../../models/address/addressModal");
 const Size = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 const { mongoose } = require("mongoose");
+const Coupon = require("../../models/coupon/couponModal");
 
 const orderPopulateConfig = [
   {
@@ -110,7 +111,7 @@ const createCheckout = asyncHandler(async (req, res) => {
       },
       payment: {
         method: paymentMethod,
-        status: paymentStatus,
+        status: paymentStatus ,
         transactionId,
         amount: finalTotal,
         paymentDate: new Date(),
@@ -122,6 +123,19 @@ const createCheckout = asyncHandler(async (req, res) => {
     });
 
     await newCheckout.save({ session });
+
+    // Mark coupon as used only after successful checkout
+    if (couponCode) {
+      const coupon = await Coupon.findOne({ couponCode });
+      if (coupon) {
+        // Only add user ID if they haven't used this coupon before
+        if (!coupon.usedBy.includes(req.user.id)) {
+          coupon.usedBy.push(req.user.id); // Add user ID to usedBy array
+          await coupon.save({ session });
+        }
+      }
+    }
+
     await session.commitTransaction();
 
     const completedOrder = await Checkout.findById(newCheckout._id).populate(

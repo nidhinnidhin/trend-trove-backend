@@ -7,7 +7,7 @@ const couponSchema = new mongoose.Schema({
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
   minOrderAmount: { type: Number, required: true },
-  usedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  usedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isExpired: { type: Boolean, default: false },
 }, { timestamps: true });
 
