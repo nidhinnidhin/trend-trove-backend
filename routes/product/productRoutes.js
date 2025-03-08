@@ -1,10 +1,11 @@
 const express = require("express");
-const { getAllProducts, getProductById, getProductDetail, fetchRelatedProducts, searchProducts, searchAndFetchRelatedProducts, getProductsByBrand, getProductsByCategory, getProductsByGender } = require("../../controllers/product/productController");
+const { getAllProducts, getProductById, getProductDetail, fetchRelatedProducts, searchProducts, searchAndFetchRelatedProducts, getProductsByBrand, getProductsByCategory, getProductsByGender, getProductFilters } = require("../../controllers/product/productController");
 const filterDeletedProducts = require('../../middleware/filterNotDeletedProducts')
 const router = express.Router();
 
 router.use(filterDeletedProducts);
 
+router.get("/filters", getProductFilters);
 router.get("/get", getAllProducts);
 
 router.get("/:id", getProductById);

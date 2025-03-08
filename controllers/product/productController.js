@@ -73,14 +73,23 @@ const getAllProducts = asyncHandler(async (req, res) => {
       page = 1,
       limit = 5,
       search = "",
+      colors = [],
+      sizes = [],
     } = req.query;
     const skip = (page - 1) * limit;
 
-    const query = {};
-
-    // Remove isDeleted filter to show all products
+    const query = { isDeleted: false };
+    
     if (search) {
       query.name = { $regex: search, $options: "i" };
+    }
+
+    if (colors.length > 0) {
+      query['variants.color'] = { $in: colors };
+    }
+
+    if (sizes.length > 0) {
+      query['variants.sizes.size'] = { $in: sizes };
     }
 
     const products = await Product.find(query)
@@ -512,6 +521,40 @@ const getProductsByGender = asyncHandler(async (req, res) => {
   }
 });
 
+// Add new endpoint to get available filters
+const getProductFilters = asyncHandler(async (req, res) => {
+  try {
+    // Get unique colors and sizes from variants
+    const products = await Product.find({ isDeleted: false })
+      .populate({
+        path: 'variants',
+        populate: {
+          path: 'sizes',
+          model: 'SizeVariant',
+        },
+      });
+
+    const colors = new Set();
+    const sizes = new Set();
+
+    products.forEach(product => {
+      product.variants.forEach(variant => {
+        colors.add(variant.color);
+        variant.sizes.forEach(size => {
+          sizes.add(size.size);
+        });
+      });
+    });
+
+    res.status(200).json({
+      colors: Array.from(colors),
+      sizes: Array.from(sizes),
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching filters", error });
+  }
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -522,4 +565,5 @@ module.exports = {
   getProductsByBrand,
   getProductsByCategory,
   getProductsByGender,
+  getProductFilters,
 };

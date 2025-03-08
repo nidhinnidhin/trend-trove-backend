@@ -46,114 +46,121 @@ const createCheckout = asyncHandler(async (req, res) => {
       discountAmount,
     } = req.body;
 
-    if (
-      !cartId ||
-      !addressId ||
-      !shippingMethod ||
-      !paymentMethod ||
-      !transactionId ||
-      !paymentStatus ||
-      !finalTotal
-    ) {
+    if (!cartId || !addressId || !shippingMethod || !paymentMethod || !transactionId || !paymentStatus || !finalTotal) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const cart = await Cart.findById(cartId).populate([
-      { 
-        path: "items.product", 
-        select: "name price isDeleted"
-      },
-      { path: "items.variant", select: "color mainImage" },
-      {
-        path: "items.sizeVariant",
-        select: "size price stockCount discountPrice",
-      },
-    ]);
+    // Fetch cart with populated fields
+    const cart = await Cart.findById(cartId)
+      .populate('items.product')
+      .populate('items.variant')
+      .populate('items.sizeVariant');
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // Check for blocked/deleted products
-    const blockedProducts = cart.items.filter(item => item.product.isDeleted);
-    if (blockedProducts.length > 0) {
-      const blockedProductNames = blockedProducts.map(item => item.product.name);
-      return res.status(400).json({ 
-        success: false,
-        message: "Some products in your cart are currently unavailable for purchase",
-        blockedProducts: blockedProductNames
-      });
+    // Check stock availability and update stock counts
+    for (const item of cart.items) {
+      const sizeVariant = await Size.findById(item.sizeVariant._id);
+      
+      if (!sizeVariant) {
+        await session.abortTransaction();
+        return res.status(404).json({
+          success: false,
+          message: `Size variant not found for product ${item.product.name}`
+        });
+      }
+
+      if (sizeVariant.stockCount < item.quantity) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `Not enough stock for ${item.product.name}. Available: ${sizeVariant.stockCount}, Requested: ${item.quantity}`
+        });
+      }
+
+      // Decrease stock count
+      sizeVariant.stockCount -= item.quantity;
+      sizeVariant.inStock = sizeVariant.stockCount > 0;
+      await sizeVariant.save({ session });
+
+      console.log(`Updated stock count for size variant ${sizeVariant._id}: ${sizeVariant.stockCount}`);
     }
 
     const address = await Address.findById(addressId);
     if (!address) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Address not found" });
     }
 
     const deliveryCharge = finalTotal < 1000 ? 40 : 0;
 
+    // Create checkout document
     const newCheckout = new Checkout({
       user: req.user.id,
       cart: cartId,
-      items: cart.items.map((item) => ({
+      items: cart.items.map(item => ({
         product: item.product._id,
         variant: item.variant._id,
         sizeVariant: item.sizeVariant._id,
         quantity: item.quantity,
         price: item.sizeVariant.price,
-        finalPrice: item.sizeVariant.discountPrice * item.quantity,
-        status: "pending",
+        finalPrice: item.sizeVariant.discountPrice || item.sizeVariant.price,
+        status: "pending"
       })),
       shipping: {
         address: addressId,
         shippingMethod,
-        deliveryCharge,
+        deliveryCharge
       },
       payment: {
         method: paymentMethod,
-        status: paymentStatus ,
+        status: paymentStatus,
         transactionId,
         amount: finalTotal,
-        paymentDate: new Date(),
+        paymentDate: new Date()
       },
-      couponCode: couponCode || null,
-      discountAmount: discountAmount || 0,
-      totalAmount: finalTotal,
       orderStatus: "pending",
+      totalAmount: finalTotal,
+      couponCode,
+      discountAmount
     });
 
     await newCheckout.save({ session });
 
-    // Mark coupon as used only after successful checkout
+    // Handle coupon if used
     if (couponCode) {
       const coupon = await Coupon.findOne({ couponCode });
       if (coupon) {
-        // Only add user ID if they haven't used this coupon before
-        if (!coupon.usedBy.includes(req.user.id)) {
-          coupon.usedBy.push(req.user.id); // Add user ID to usedBy array
-          await coupon.save({ session });
-        }
+        coupon.usedBy.push(req.user.id);
+        await coupon.save({ session });
       }
     }
 
+    // Clear the cart
+    cart.items = [];
+    await cart.save({ session });
+
     await session.commitTransaction();
 
-    const completedOrder = await Checkout.findById(newCheckout._id).populate(
-      orderPopulateConfig
-    );
+    // Fetch the complete order details
+    const completedOrder = await Checkout.findById(newCheckout._id)
+      .populate(orderPopulateConfig);
 
     res.status(201).json({
       success: true,
-      message: "Checkout created successfully",
-      order: completedOrder,
-      checkoutId: newCheckout._id
+      message: "Order placed successfully",
+      order: completedOrder
     });
+
   } catch (error) {
+    console.error("Checkout Error:", error);
     await session.abortTransaction();
     res.status(500).json({
       success: false,
       message: "Error creating checkout",
-      error: error.message,
+      error: error.message
     });
   } finally {
     session.endSession();
