@@ -328,7 +328,7 @@ connectDb().then(async () => {
     await createInitialAdmin(); 
     console.log("Admin initialization completed");
     
-    server.listen(PORT, () => {
+    server.listen(PORT,'0.0.0.0', () => {
       console.log(`Server started on port ${PORT}`);
     });
   } catch (error) {
