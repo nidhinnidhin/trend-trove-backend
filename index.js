@@ -54,7 +54,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "https://trend-trove-frontend-byo7trfjt-nidhinbabu171gmailcoms-projects.vercel.app",
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -194,7 +194,7 @@ app.use(passport.session());
 
 // 1. Configure CORS
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: "https://trend-trove-frontend-byo7trfjt-nidhinbabu171gmailcoms-projects.vercel.app/",
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [

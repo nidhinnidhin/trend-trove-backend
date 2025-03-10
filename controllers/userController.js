@@ -585,7 +585,7 @@ passport.use(
             username: username,
             email: profile.emails[0].value,
             image: profile.photos[0].value,
-            password: null // Google authenticated users don't need password
+            password: null 
           });
 
           // Create wallet for new user

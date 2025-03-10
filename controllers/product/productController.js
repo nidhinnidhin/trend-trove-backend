@@ -78,7 +78,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     } = req.query;
     const skip = (page - 1) * limit;
 
-    const query = { isDeleted: false };
+    const query = {};
     
     if (search) {
       query.name = { $regex: search, $options: "i" };
@@ -129,8 +129,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     console.error("Error in getAllProducts:", error);
     res.status(500).json({ 
       message: "Error fetching products", 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+      error: error.message 
     });
   }
 });
@@ -402,7 +401,7 @@ const getProductsByBrand = asyncHandler(async (req, res) => {
       });
     }
 
-    const products = await Product.find({ brand: brandId, isDeleted: false })
+    const products = await Product.find({ brand: brandId })
       .populate("brand", "name")
       .populate("category", "name")
       .populate({
@@ -438,8 +437,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
     const skip = (page - 1) * limit;
 
     const query = { 
-      category: categoryId,
-      isDeleted: false 
+      category: categoryId
     };
 
     const products = await Product.find(query)
@@ -483,8 +481,7 @@ const getProductsByGender = asyncHandler(async (req, res) => {
     const skip = (page - 1) * limit;
 
     const query = { 
-      gender: { $regex: new RegExp(gender, 'i') },
-      isDeleted: false 
+      gender: { $regex: new RegExp(gender, 'i') }
     };
 
     const products = await Product.find(query)
