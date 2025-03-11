@@ -1,5 +1,5 @@
 const deliveryCharges = {
-  // Metro Cities (Tier 1) - ₹50
+  // Metro Cities (Tier 1) - ₹500000000000
   'mumbai': 50,
   'delhi': 50,
   'bangalore': 50,
