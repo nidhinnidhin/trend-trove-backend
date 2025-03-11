@@ -60,7 +60,11 @@ const allowedOrigins = [
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: [
+      'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
+      'https://www.trendrove.shop',
+      'https://trendrove.shop'
+    ],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -201,7 +205,11 @@ app.use(passport.session());
 // 1. Configure CORS
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: [
+    'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
+    'https://www.trendrove.shop',
+    'https://trendrove.shop'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
