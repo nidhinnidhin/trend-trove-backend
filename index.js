@@ -189,9 +189,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,
-    sameSite: 'none',
-    maxAge: 24 * 60 * 60 * 1000
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
 
@@ -202,14 +201,24 @@ app.use(passport.session());
 // 1. Configure CORS
 
 app.use(cors({
-  origin: [
-    'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
-    'https://www.trendrove.shop',
-    'https://trendrove.shop'
-  ],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-csrf-token',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['x-csrf-token']
 }));
 
 // 2. Configure CSRF protection
@@ -217,10 +226,10 @@ const csrfProtection = csrf({
   cookie: {
     key: '_csrf',
     httpOnly: true,
-    sameSite: 'none',
-    secure: true,
-  },
-  ignoreMethods: ['GET', 'HEAD', 'OPTIONS'],
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/'
+  }
 });
 
 // 3. Global error handler
@@ -258,23 +267,19 @@ app.get('/api/csrf-token', (req, res) => {
 
 // 5. CSRF Protection Middleware
 const csrfMiddleware = (req, res, next) => {
-  // Exclude paths and methods from CSRF protection
+  // Exclude certain paths from CSRF protection
   const excludedPaths = [
     '/api/csrf-token',
-    '/api/users/login',
-    '/api/users/register',
-    '/api/users/auth/google',
-    '/api/users/auth/google/callback',
+    '/api/users/logout',
     '/api/admin/adminlogin',
-    '/api/admin/logout',
-    '/api/otp/send-otp',
-    '/api/otp/verify-otp'
+    '/api/admin/logout'
   ];
 
   if (excludedPaths.includes(req.path) || req.method === 'GET') {
     return next();
   }
 
+  // Apply CSRF protection
   csrfProtection(req, res, next);
 };
 
