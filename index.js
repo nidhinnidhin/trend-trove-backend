@@ -52,9 +52,15 @@ const mongoose = require('mongoose');
 
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
+  'https://www.trendrove.shop',
+  'https://trendrove.shop'
+];
+
 const io = new Server(server, {
   cors: {
-    origin: "https://trend-trove-frontend-byo7trfjt-nidhinbabu171gmailcoms-projects.vercel.app",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -193,8 +199,15 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // 1. Configure CORS
+
 app.use(cors({
-  origin: "https://trend-trove-frontend-byo7trfjt-nidhinbabu171gmailcoms-projects.vercel.app/",
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
