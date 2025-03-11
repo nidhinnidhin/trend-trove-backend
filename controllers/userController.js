@@ -561,7 +561,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://www.trendrove.shop/api/users/auth/google/callback",
+      callbackURL: `${process.env.BACKEND_URL}/api/users/auth/google/callback`,
       passReqToCallback: true,
     },
     async (req, accessToken, refreshToken, profile, done) => {
@@ -569,13 +569,11 @@ passport.use(
         let user = await User.findOne({ email: profile.emails[0].value });
         
         if (user) {
-          // Update Google ID if user exists but doesn't have one
           if (!user.googleId) {
             user.googleId = profile.id;
             await user.save();
           }
         } else {
-          // Create new user
           const username = `${profile.name.givenName}${Math.random().toString(36).slice(2, 8)}`.toLowerCase();
           
           user = await User.create({
@@ -588,7 +586,6 @@ passport.use(
             password: null 
           });
 
-          // Create wallet for new user
           await Wallet.create({
             userId: user._id,
             balance: 0,
@@ -596,7 +593,6 @@ passport.use(
           });
         }
 
-        // Generate JWT token
         const token = Jwt.sign(
           { id: user._id, email: user.email },
           process.env.JWT_SECRET || "1921u0030",
