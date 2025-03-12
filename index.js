@@ -55,7 +55,8 @@ const server = http.createServer(app);
 const allowedOrigins = [
   'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
   'https://www.trendrove.shop',
-  'https://trendrove.shop'
+  'https://trendrove.shop',
+  'http://localhost:3000'
 ];
 
 const io = new Server(server, {
@@ -63,7 +64,8 @@ const io = new Server(server, {
     origin: [
       'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
       'https://www.trendrove.shop',
-      'https://trendrove.shop'
+      'https://trendrove.shop',
+      'http://localhost:3000'
     ],
     methods: ["GET", "POST"],
     credentials: true
@@ -208,7 +210,8 @@ app.use(cors({
   origin: [
     'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
     'https://www.trendrove.shop',
-    'https://trendrove.shop'
+    'https://trendrove.shop',
+    'http://localhost:3000'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
