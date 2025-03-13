@@ -40,7 +40,7 @@ const allowedOrigins = [
   'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
   'https://www.trendrove.shop',
   'https://trendrove.shop',
-  'http://localhost:3000'
+  // 'http://localhost:3000'
 ];
 
 // Configure socket.io
