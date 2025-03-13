@@ -37,10 +37,11 @@ const server = http.createServer(app);
 
 // Define allowed origins
 const allowedOrigins = [
-  'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
   'https://www.trendrove.shop',
   'https://trendrove.shop',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  // Add your Vercel deployment URL here
+  'https://trend-trove-frontend-vert.vercel.app'
 ];
 
 // Configure socket.io
@@ -173,13 +174,19 @@ app.use(session({
   }
 }));
 
-// Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
 
-// CORS configuration
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
