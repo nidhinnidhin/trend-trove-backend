@@ -1,77 +1,15 @@
 const Product = require("../../models/product/productModel");
 const Variant = require("../../models/product/variantModel");
+const Review = require("../../models/review/reviewModel")
 const SizeVariant = require("../../models/product/sizesVariantModel");
 const asyncHandler = require("express-async-handler");
 const { checkActiveOffers } = require("../../admin/helper/offerHelpers");
-
-// const getAllProducts = asyncHandler(async (req, res) => {
-//   try {
-//     const {
-//       page = 1,
-//       limit = 5,
-//       search = "",
-//       includeDeleted = false,
-//     } = req.query;
-//     const skip = (page - 1) * limit;
-
-//     const query = {};
-
-//     if (!includeDeleted) {
-//       query.isDeleted = false;
-//     }
-
-//     if (search) {
-//       query.name = { $regex: search, $options: "i" };
-//     }
-
-//     const products = await Product.find(query)
-//       .sort({ createdAt: -1 })
-//       .skip(skip)
-//       .limit(parseInt(limit))
-//       .populate("brand", "name")
-//       .populate("category", "name")
-//       .populate("activeOffer", "offerName discountPercentage startDate endDate")
-//       .populate({
-//         path: "variants",
-//         populate: {
-//           path: "sizes",
-//           model: "SizeVariant",
-//         },
-//       });
-
-//     const totalProducts = await Product.countDocuments(query);
-
-//     const productsWithOffers = await Promise.all(
-//       products.map(async (product) => {
-//         const activeOffer = await checkActiveOffers(product);
-//         return {
-//           ...product._doc,
-//           activeOffer: activeOffer
-//             ? {
-//                 discountPercentage: activeOffer.discountPercentage,
-//                 offerName: activeOffer.offerName,
-//               }
-//             : null,
-//           price: activeOffer ? product.discountedPrice : product.price, // Display discounted price if offer exists
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       products: productsWithOffers,
-//       totalPages: Math.ceil(totalProducts / limit),
-//       currentPage: parseInt(page),
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error fetching products", error });
-//   }
-// });
 
 const getAllProducts = asyncHandler(async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 5,
+      limit = 12,
       search = "",
       colors = [],
       sizes = [],
@@ -109,8 +47,29 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
     const totalProducts = await Product.countDocuments(query);
 
-    const productsWithStatus = products.map(product => {
+    // Process products to include availability, variant reviews and ratings
+    const productsWithStatusAndReviews = await Promise.all(products.map(async (product) => {
       const productObj = product.toObject();
+      
+      // Get variant-specific reviews and ratings
+      if (productObj.variants && productObj.variants.length > 0) {
+        productObj.variants = await Promise.all(productObj.variants.map(async (variant) => {
+          const variantReviews = await Review.find({ variant: variant._id });
+          let averageRating = 0;
+          
+          if (variantReviews.length > 0) {
+            const totalRating = variantReviews.reduce((sum, review) => sum + review.rating, 0);
+            averageRating = totalRating / variantReviews.length;
+          }
+          
+          return {
+            ...variant,
+            reviewCount: variantReviews.length,
+            averageRating: parseFloat(averageRating.toFixed(1))
+          };
+        }));
+      }
+      
       return {
         ...productObj,
         availability: productObj.isDeleted ? "Coming Soon" : "Available",
@@ -118,61 +77,21 @@ const getAllProducts = asyncHandler(async (req, res) => {
           _id: productObj.activeOffer,
         } : null
       };
-    });
+    }));
 
     res.status(200).json({
-      products: productsWithStatus,
+      products: productsWithStatusAndReviews,
       totalPages: Math.ceil(totalProducts / limit),
       currentPage: parseInt(page),
     });
   } catch (error) {
     console.error("Error in getAllProducts:", error);
-    res.status(500).json({ 
-      message: "Error fetching products", 
-      error: error.message 
+    res.status(500).json({
+      message: "Error fetching products",
+      error: error.message
     });
   }
 });
-
-// const getProductDetail = asyncHandler(async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const product = await Product.findById(id)
-//       .populate("category", "name")
-//       .populate("brand", "name")
-//       .populate({
-//         path: "variants",
-//         populate: {
-//           path: "sizes",
-//           model: "SizeVariant",
-//         },
-//       });
-
-//     if (!product) {
-//       return res.status(404).json({ message: "Product not found." });
-//     }
-
-//     // Get active offer for this product if any
-//     const activeOffer = await checkActiveOffers(product);
-//     const productWithOffer = {
-//       ...product._doc,
-//       activeOffer: activeOffer
-//         ? {
-//             discountPercentage: activeOffer.discountPercentage,
-//             offerName: activeOffer.offerName,
-//           }
-//         : null,
-//     };
-
-//     res.status(200).json({
-//       message: "Product details retrieved successfully",
-//       product: productWithOffer,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error fetching product details", error });
-//   }
-// });
 
 const getProductDetail = asyncHandler(async (req, res) => {
   try {
@@ -193,10 +112,31 @@ const getProductDetail = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found." });
     }
 
+    // Get variant-specific reviews and ratings
+    const productObj = product.toObject();
+    if (productObj.variants && productObj.variants.length > 0) {
+      productObj.variants = await Promise.all(productObj.variants.map(async (variant) => {
+        const variantReviews = await Review.find({ variant: variant._id }).populate("user", "name email");
+        let averageRating = 0;
+        
+        if (variantReviews.length > 0) {
+          const totalRating = variantReviews.reduce((sum, review) => sum + review.rating, 0);
+          averageRating = totalRating / variantReviews.length;
+        }
+        
+        return {
+          ...variant,
+          reviews: variantReviews,
+          reviewCount: variantReviews.length,
+          averageRating: parseFloat(averageRating.toFixed(1))
+        };
+      }));
+    }
+
     // Get active offer for this product if any
     const activeOffer = await checkActiveOffers(product);
     const productWithOffer = {
-      ...product._doc,
+      ...productObj,
       activeOffer: activeOffer
         ? {
             discountPercentage: activeOffer.discountPercentage,

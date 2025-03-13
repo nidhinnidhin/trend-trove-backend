@@ -16,11 +16,6 @@ const ProductSchema = new mongoose.Schema(
     },
     material: { type: String },
     pattern: { type: String },
-    reviews: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Review",
-      required: true,
-    },
     gender: { type: String, required: true },
     variants: [{ type: mongoose.Schema.Types.ObjectId, ref: "Variant" }],
     activeOffer: {

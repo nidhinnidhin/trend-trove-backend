@@ -1,57 +1,41 @@
+// Import core dependencies
 const express = require("express");
-const connectDb = require("./db/connection");
-const app = express();
+const http = require('http');
 const cors = require("cors");
-const { updateOfferStatus } = require('./admin/helper/offerHelpers')
-const morgan = require('morgan');
-const helmet = require('helmet');
-const csrf = require('csurf');
-const cron = require('node-cron');
-const userRoutes = require("./routes/userRoutes");
-// const adminRoutes = require("./routes/adminRoutes");
-const adminRoutes = require("./admin/routes/authentication/AdminRoutes");
-const userProductRoutes = require("./routes/product/productRoutes");
-const adminProductRoutes = require("./admin/routes/product/ProductRoutes");
-const userBrandRoutes = require("./routes/product/brandRoutes");
-const adminBrandRoutes = require("./admin/routes/product/BrandRoutes");
-const userColorVariantRoutes = require("./routes/product/variantRoutes");
-const adminColorVariantRoutes = require("./admin/routes/product/ColorVariantRoutes");
-const userCategoryRoutes = require("./routes/product/categoryRoutes");
-const adminCategoryRoutes = require("./admin/routes/product/CategoryRoutes");
-const userSizeVariantRoutes = require("./routes/product/sizesRoutes");
-const adminSizeVariantRoutes = require("./admin/routes/product/SizeVariantRoutes");
-const cartRoutes = require("./routes/cart/cartRoutes");
-const addressRoutes = require("./routes/address/addressRoutes");
-const userCheckoutRoutes = require("./routes/checkout/checkoutRoutes");
-const adminCheckoutRoutes = require("./admin/routes/checkout/CheckoutRoutes");
-const userWishlistRoutes = require("./routes/wishlist/wishlistRoutes")
-const adminCouponRoutes = require("./admin/routes/coupon/couponRoutes")
-const userCouponRoutes = require("./routes/coupon/couponRoutes")
-const adminOfferRoutes = require('./admin/routes/offer/offerRoutes')
-const payementRoutes = require("./routes/payment/paymentRoutes")
-const walletRoutes = require("./routes/wallet/walletRoutes")
-const otpRoutes = require("./routes/otp/signupOtpRoutes");
-const reviewRoutes = require("./routes/review/reviewRoute");
 const bodyParser = require("body-parser");
-const passport = require("passport");
 const cookieParser = require("cookie-parser");
 const session = require('express-session');
-require("./config/passport");
-const Review = require("./models/review/reviewModel")
-const bannerRoutes = require("./routes/banners/bannerRoutes");
-const { createInitialAdmin } = require('./admin/controllers/authentication/adminController');
-const userChatRoutes = require('./routes/chat/chatRoutes');
-const adminChatRoutes = require('./admin/routes/chat/chatRoutes');
-const http = require('http');
-const { Server } = require('socket.io');
-const Chat = require('./models/chat/chatModel');
-const User = require('./models/userModel'); // Adjust path as needed
-const Admin = require('./models/admin/adminModel');
+const passport = require("passport");
 const mongoose = require('mongoose');
+require("dotenv").config();
 
+// Import security middleware
+const helmet = require('helmet');
+const csrf = require('csurf');
+const morgan = require('morgan');
 
+// Import database connection
+const connectDb = require("./db/connection");
+
+// Import socket.io
+const { Server } = require('socket.io');
+
+// Import models
+const Chat = require('./models/chat/chatModel');
+const User = require('./models/userModel'); 
+const Admin = require('./models/admin/adminModel');
+const Review = require("./models/review/reviewModel");
+
+// Import helpers
+const { updateOfferStatus } = require('./admin/helper/offerHelpers');
+const { createInitialAdmin } = require('./admin/controllers/authentication/adminController');
+const cron = require('node-cron');
+
+// Initialize express app and server
+const app = express();
 const server = http.createServer(app);
 
+// Define allowed origins
 const allowedOrigins = [
   'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
   'https://www.trendrove.shop',
@@ -59,40 +43,33 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
+// Configure socket.io
 const io = new Server(server, {
   cors: {
-    origin: [
-      'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
-      'https://www.trendrove.shop',
-      'https://trendrove.shop',
-      'http://localhost:3000'
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
+// Socket.io event handlers
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  // Handle user joining
   socket.on('join', async (userId) => {
     console.log(`User ${userId} joined the chat`);
     socket.join(userId);
   });
 
-  // Handle admin joining
   socket.on('admin-join', () => {
     console.log('Admin joined the chat');
     socket.join('admin-room');
   });
 
-  // Handle sending messages
   socket.on('send-message', async (data) => {
     try {
       const { userId, message, senderType } = data;
       
-      // Get admin ID from the database using the token
       let senderId;
       if (senderType === 'Admin') {
         const admin = await Admin.findOne({ email: 'admin@gmail.com' });
@@ -101,7 +78,6 @@ io.on('connection', (socket) => {
         senderId = userId;
       }
       
-      // Create message object with a unique _id
       const messageObj = {
         _id: new mongoose.Types.ObjectId(),
         sender: senderId,
@@ -111,7 +87,6 @@ io.on('connection', (socket) => {
         read: false
       };
 
-      // Find or create chat
       let chat = await Chat.findOne({ user: userId });
 
       if (!chat) {
@@ -121,11 +96,10 @@ io.on('connection', (socket) => {
           lastMessage: new Date()
         });
       } else {
-        // Check for duplicate message before adding
         const isDuplicate = chat.messages.some(msg => 
           msg.message === message && 
           msg.senderType === senderType &&
-          Math.abs(new Date(msg.timestamp) - new Date()) < 1000 // Within 1 second
+          Math.abs(new Date(msg.timestamp) - new Date()) < 1000 
         );
 
         if (!isDuplicate) {
@@ -136,7 +110,6 @@ io.on('connection', (socket) => {
 
       await chat.save();
 
-      // Emit to appropriate rooms
       if (senderType === 'User') {
         socket.emit('message-sent', { status: 'success', message: messageObj });
         io.to('admin-room').emit('new-message', { 
@@ -154,7 +127,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle message read status
   socket.on('mark-messages-read', async ({ chatId }) => {
     try {
       await Chat.updateMany(
@@ -182,37 +154,32 @@ io.on('connection', (socket) => {
   });
 });
 
-require("dotenv").config();
+// Configure Passport
+require("./config/passport");
 
-// Move these configurations to the top of your file, before any routes
+// Middleware setup
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure session before passport
+// Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000 
   }
 }));
 
-// Initialize passport after session
+// Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
 
-// 1. Configure CORS
-
+// CORS configuration
 app.use(cors({
-  origin: [
-    'https://trend-trove-frontend-liwllg90g-nidhinbabu171gmailcoms-projects.vercel.app',
-    'https://www.trendrove.shop',
-    'https://trendrove.shop',
-    'http://localhost:3000'
-  ],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
@@ -226,7 +193,7 @@ app.use(cors({
   exposedHeaders: ['x-csrf-token']
 }));
 
-// 2. Configure CSRF protection
+// CSRF protection setup
 const csrfProtection = csrf({
   cookie: {
     key: '_csrf',
@@ -237,7 +204,7 @@ const csrfProtection = csrf({
   }
 });
 
-// 3. Global error handler
+// Error handling middleware
 app.use((err, req, res, next) => {
   if (err.code === 'EBADCSRFTOKEN') {
     return res.status(403).json({
@@ -246,7 +213,6 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Handle other errors
   console.error(err.stack);
   res.status(500).json({
     status: 'error',
@@ -254,9 +220,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 4. CSRF Token endpoint
+// CSRF token generation endpoint
 app.get('/api/csrf-token', (req, res) => {
-  // Generate CSRF token without protection
   const token = csrf({
     cookie: {
       key: '_csrf',
@@ -270,9 +235,8 @@ app.get('/api/csrf-token', (req, res) => {
   });
 });
 
-// 5. CSRF Protection Middleware
+// CSRF middleware with path exclusions
 const csrfMiddleware = (req, res, next) => {
-  // Exclude certain paths from CSRF protection
   const excludedPaths = [
     '/api/csrf-token',
     '/api/users/logout',
@@ -284,20 +248,20 @@ const csrfMiddleware = (req, res, next) => {
     return next();
   }
 
-  // Apply CSRF protection
   csrfProtection(req, res, next);
 };
 
-
+// Apply security middleware
 app.use(csrfMiddleware);
-
 app.use(morgan('dev')); 
 app.use(helmet());
 
+// Test route for CSRF
 app.post('/api/protected-route', (req, res) => {
   res.send('CSRF token is valid!');
 });
 
+// Database index management
 async function dropReviewIndex() {
   try {
     await Review.collection.dropIndex("user_1_product_1_variant_1_sizeVariant_1");
@@ -309,36 +273,85 @@ async function dropReviewIndex() {
 
 dropReviewIndex();
 
-// Add chat routes before the error handler
+// Import user related route modules
+
+const userRoutes = require("./routes/userRoutes");
+const userProductRoutes = require("./routes/product/productRoutes");
+const userBrandRoutes = require("./routes/product/brandRoutes");
+const userColorVariantRoutes = require("./routes/product/variantRoutes");
+const userCategoryRoutes = require("./routes/product/categoryRoutes");
+const userSizeVariantRoutes = require("./routes/product/sizesRoutes");
+const cartRoutes = require("./routes/cart/cartRoutes");
+const addressRoutes = require("./routes/address/addressRoutes");
+const userCheckoutRoutes = require("./routes/checkout/checkoutRoutes");
+const userWishlistRoutes = require("./routes/wishlist/wishlistRoutes");
+const userCouponRoutes = require("./routes/coupon/couponRoutes");
+const payementRoutes = require("./routes/payment/paymentRoutes");
+const walletRoutes = require("./routes/wallet/walletRoutes");
+const otpRoutes = require("./routes/otp/signupOtpRoutes");
+const reviewRoutes = require("./routes/review/reviewRoute");
+const bannerRoutes = require("./routes/banners/bannerRoutes");
+const userChatRoutes = require('./routes/chat/chatRoutes');
+
+// Import admin related route modules
+
+const adminRoutes = require("./admin/routes/authentication/AdminRoutes");
+const adminProductRoutes = require("./admin/routes/product/ProductRoutes");
+const adminBrandRoutes = require("./admin/routes/product/BrandRoutes");
+const adminColorVariantRoutes = require("./admin/routes/product/ColorVariantRoutes");
+const adminCategoryRoutes = require("./admin/routes/product/CategoryRoutes");
+const adminSizeVariantRoutes = require("./admin/routes/product/SizeVariantRoutes");
+const adminCheckoutRoutes = require("./admin/routes/checkout/CheckoutRoutes");
+const adminCouponRoutes = require("./admin/routes/coupon/couponRoutes");
+const adminOfferRoutes = require('./admin/routes/offer/offerRoutes');
+const adminChatRoutes = require('./admin/routes/chat/chatRoutes');
+
+// Apply routes
+// Chat routes (placed before other routes as in original)
 app.use("/api/admin/chat/", adminChatRoutes);
 app.use("/api/chat/", userChatRoutes);
 
+// User and admin authentication routes
 app.use("/api/users/", userRoutes);
 app.use("/api/admin/", adminRoutes);
+
+// Product related routes
 app.use("/api/products/", userProductRoutes);
 app.use("/api/admin/products/", adminProductRoutes);
 app.use("/api/brands/", userBrandRoutes); 
 app.use("/api/admin/brands/", adminBrandRoutes);
 app.use("/api/categories/", userCategoryRoutes);
 app.use("/api/admin/categories/", adminCategoryRoutes);
-app.use("/api/otp/", otpRoutes); 
 app.use("/api/variants/", userColorVariantRoutes);
 app.use("/api/admin/variants/", adminColorVariantRoutes);
 app.use("/api/sizes/", userSizeVariantRoutes);
 app.use("/api/admin/sizes/", adminSizeVariantRoutes);
+
+// admin related routes
+app.use("/api/admin/checkout/", adminCheckoutRoutes);
+app.use("/api/admin/coupon/", adminCouponRoutes);
+app.use("/api/admin/offer/", adminOfferRoutes);
+
+// User experience routes
 app.use("/api/cart/", cartRoutes);
 app.use("/api/address/", addressRoutes);
 app.use("/api/checkout/", userCheckoutRoutes);
-app.use("/api/admin/checkout/", adminCheckoutRoutes);
 app.use("/api/user/wishlist/", userWishlistRoutes);
-app.use("/api/admin/coupon/", adminCouponRoutes)
-app.use("/api/coupon/", userCouponRoutes)
-app.use("/api/admin/offer/", adminOfferRoutes)
-app.use("/api/payment/", payementRoutes)
+app.use("/api/coupon/", userCouponRoutes);
+app.use("/api/payment/", payementRoutes);
 app.use('/api/wallet/', walletRoutes);
 app.use("/api/user/review/", reviewRoutes);
 app.use("/api/banners/", bannerRoutes);
 
+// Utility routes
+app.use("/api/otp/", otpRoutes);
+
+// Root route
+app.get("/", (req, res) => {
+  res.send("Hello world");
+});
+
+// Connect to database and start server
 connectDb().then(async () => {
   const PORT = process.env.PORT || 9090;
   
@@ -346,16 +359,10 @@ connectDb().then(async () => {
     await createInitialAdmin(); 
     console.log("Admin initialization completed");
     
-    server.listen(PORT,'0.0.0.0', () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server started on port ${PORT}`);
     });
   } catch (error) {
     console.error("Server initialization error:", error);
   }
 });
-    
-app.get("/", (req, res) => {
-  res.send("Hello world");
-});
-
-// app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
