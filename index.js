@@ -47,7 +47,7 @@ const allowedOrigins = [
 // Configure socket.io
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -203,8 +203,8 @@ app.use(passport.session());
 
 // CSRF protection setup
 
- app.use(cors())
- 
+ app.use(cors({origin:"*"}))
+
 const csrfProtection = csrf({
   cookie: {
     key: '_csrf',
