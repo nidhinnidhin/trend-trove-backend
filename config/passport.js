@@ -8,7 +8,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://trendrove.shop/api/users/auth/google/callback",
+      callbackURL: "http://www.api.trendrove.shop/api/users/auth/google/callback",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

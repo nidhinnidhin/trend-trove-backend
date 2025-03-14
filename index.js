@@ -40,8 +40,8 @@ const allowedOrigins = [
   'https://www.trendrove.shop',
   'https://trendrove.shop',
   'http://localhost:3000',
-  // Add your Vercel deployment URL here
-  'https://trend-trove-frontend-vert.vercel.app'
+  'http://www.api.trendrove.shop',
+  'https://trend-trove-frontend-git-master-nidhinbabu171gmailcoms-projects.vercel.app'
 ];
 
 // Configure socket.io
