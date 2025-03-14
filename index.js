@@ -40,14 +40,15 @@ const allowedOrigins = [
   'https://www.trendrove.shop',
   'https://trendrove.shop',
   'http://localhost:3000',
-  'http://www.api.trendrove.shop',
+  'https://www.api.trendrove.shop',
+  // Add your Vercel deployment URL here
   'https://trend-trove-frontend-git-master-nidhinbabu171gmailcoms-projects.vercel.app'
 ];
 
 // Configure socket.io
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -177,34 +178,30 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// app.use(cors({
-
-//   origin: function(origin, callback) {
-//     if (!origin) return callback(null, true);
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
     
-//     if (allowedOrigins.indexOf(origin) === -1) {
-//       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-//       return callback(new Error(msg), false);
-//     }
-//     return callback(null, true);
-//   },
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-//   allowedHeaders: [
-//     'Content-Type', 
-//     'Authorization', 
-//     'x-csrf-token',
-//     'X-Requested-With',
-//     'Accept',
-//     'Origin'
-//   ],
-//   exposedHeaders: ['x-csrf-token']
-// }));
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-csrf-token',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['x-csrf-token']
+}));
 
 // CSRF protection setup
-
- app.use(cors({origin:"*"}))
-
 const csrfProtection = csrf({
   cookie: {
     key: '_csrf',
