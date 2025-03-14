@@ -41,12 +41,12 @@ const allowedOrigins = [
   'https://trendrove.shop',
   'http://localhost:3000',
   'https://www.api.trendrove.shop',
-  // Add your Vercel deployment URL here
+  'https://api.trendrove.shop',
   'https://trend-trove-frontend-git-master-nidhinbabu171gmailcoms-projects.vercel.app'
 ];
 
 // Configure socket.io
-const io = new Server(server, {
+const io = new Server(server, { 
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
